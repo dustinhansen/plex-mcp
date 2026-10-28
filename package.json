@@ -1,0 +1,65 @@
+{
+  "name": "@dustinhansen/plex-mcp",
+  "version": "0.9.0",
+  "mcpName": "io.github.dustinhansen/plex-mcp",
+  "description": "MCP server for Plex Media Server: full-library browsing with watched state, all-user watch history, recommendations, curation writes, plex.tv sign-in, and opt-in playback.",
+  "type": "module",
+  "bin": {
+    "plex-mcp": "dist/index.js"
+  },
+  "imports": {
+    "#dist/*.js": {
+      "types": "./*.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "npm run build && node --test 'test/**/*.test.ts'",
+    "test:types": "tsc --project test/types",
+    "smoke": "npm run build && node smoke.ts",
+    "smoke:artifact": "node test/build/emitted-artifact-smoke.ts",
+    "typecheck": "tsc --noEmit && tsc --project test",
+    "build": "rm -rf dist && tsc",
+    "prepack": "npm run build",
+    "test:artifact": "npm run build && node test/build/emitted-artifact-smoke.ts checkout"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "plex",
+    "plex-media-server",
+    "claude",
+    "ai",
+    "media"
+  ],
+  "author": "Dustin Hansen",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dustinhansen/plex-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dustinhansen/plex-mcp/issues"
+  },
+  "homepage": "https://github.com/dustinhansen/plex-mcp#readme",
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "5.9.3"
+  }
+}

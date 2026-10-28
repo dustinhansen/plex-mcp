@@ -1,0 +1,251 @@
+name: release
+
+# A GitHub release published by hand is the only trigger. npm's trusted
+# publisher pins this file's name, and keeping the write scopes here keeps
+# ci.yml free of them.
+on:
+  release:
+    types: [published]
+
+# Each job that writes asks for its own scope below; everything else gets the
+# checkout's read.
+permissions:
+  contents: read
+
+# One run per tag, never cancelled: a publish stopped halfway leaves npm and the
+# image on different versions.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/dustinhansen/plex-mcp
+
+jobs:
+  # The same checks a pull request runs, against the tagged commit.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  # The tag is v plus every version field, and the release's prerelease flag
+  # agrees with the version. Everything after this trusts both.
+  verify:
+    needs: ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - env:
+          TAG: ${{ github.ref_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: node scripts/verify-release-tag.ts "$TAG" "$PRERELEASE"
+
+  # Trusted publishing, with provenance (publishConfig.provenance refuses a
+  # publish without it). npm tries the OIDC exchange first and falls back to
+  # NODE_AUTH_TOKEN: trusted publishing cannot create a package, so a
+  # package's first version goes up with a one-off token.
+  npm:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Node 24 ships the npm that trusted publishing needs. No dependency
+      # cache: a publishing job installs from the lockfile alone.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Check npm can publish through OIDC
+        run: |
+          IFS=. read -r major minor patch <<< "$(npm --version)"
+          if (( major < 11 || (major == 11 && (minor < 5 || (minor == 5 && patch < 1))) )); then
+            echo "npm $(npm --version) is older than 11.5.1, the first with trusted publishing" >&2
+            exit 1
+          fi
+      - run: npm ci
+      - env:
+          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+          DIST_TAG: ${{ github.event.release.prerelease && 'next' || 'latest' }}
+        run: npm publish --tag "$DIST_TAG"
+
+  # One leg per platform, each on a runner of that architecture so arm64 needs
+  # no QEMU. A leg pushes its image by digest only; the image job names it.
+  image-build:
+    needs: verify
+    runs-on: ${{ matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Only the labels are used: the image job applies the tags. The semver
+      # rule is what gives org.opencontainers.image.version its value, 0.9.0
+      # for the tag v0.9.0.
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: type=semver,pattern={{version}}
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          provenance: mode=max
+          sbom: true
+          # The OCI labels, org.opencontainers.image.revision among them, go in
+          # each platform image's config, where `docker inspect` reads them.
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+      - env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: digest-${{ matrix.platform == 'linux/arm64' && 'arm64' || 'amd64' }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Both legs merged into one multi-arch manifest under the release's tag, then
+  # attested, so `gh attestation verify oci://ghcr.io/dustinhansen/plex-mcp:vX.Y.Z`
+  # checks the image the way npm provenance checks the package.
+  image:
+    needs: image-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: digest-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Merge the platforms under the release tag
+        id: manifest
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          sources=()
+          for digest in *; do sources+=("$IMAGE@sha256:$digest"); done
+          docker buildx imagetools create --tag "$IMAGE:$TAG" "${sources[@]}"
+          set -o pipefail
+          manifest=$(docker buildx imagetools inspect "$IMAGE:$TAG" --format '{{json .Manifest}}' | jq -er .digest)
+          echo "digest=$manifest" >> "$GITHUB_OUTPUT"
+      # No floating :X.Y or :X tags before 1.0, where a minor bump can break.
+      - name: Move :latest to this release
+        if: ${{ !github.event.release.prerelease }}
+        env:
+          TAG: ${{ github.ref_name }}
+        run: docker buildx imagetools create --tag "$IMAGE:latest" "$IMAGE:$TAG"
+      # A storage record needs an organization-owned repository, and this one
+      # is a personal account's.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.manifest.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+  # The registry looks up both packages as it validates server.json: the npm
+  # version, through npm's propagation lag, and the image, pulled anonymously.
+  # So this waits for both jobs. It is its own job so "Re-run failed jobs" can
+  # retry it alone: npm will not take the same version twice. A prerelease is
+  # never listed. The timeout fits both steps' full backoff, 465s each.
+  registry:
+    needs: [npm, image]
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      BACKOFF: 15 30 60 120 240
+    steps:
+      # The registry rejects an image it cannot pull anonymously, and a new GHCR
+      # package is private until someone changes that in its settings page; no
+      # API can. So this asks the same question first, with no login and an
+      # empty credential store, and says what to do when the answer is no. No
+      # packages: read either: a token would answer a different question. It
+      # retries so that one transient GHCR error does not fail the release.
+      - name: Check the image is publicly pullable
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          export DOCKER_CONFIG="$RUNNER_TEMP/docker-anonymous"
+          mkdir -p "$DOCKER_CONFIG"
+          # Plugins, not credentials: keeps a per-user buildx install findable.
+          if [ -d "$HOME/.docker/cli-plugins" ]; then
+            ln -s "$HOME/.docker/cli-plugins" "$DOCKER_CONFIG/cli-plugins"
+          fi
+          inspect() {
+            docker buildx imagetools inspect "$IMAGE:$TAG" > /dev/null
+          }
+          for wait in $BACKOFF; do
+            inspect && exit 0
+            echo "anonymous pull of $IMAGE:$TAG refused; retrying in ${wait}s"
+            sleep "$wait"
+          done
+          inspect && exit 0
+          echo "::error::$IMAGE:$TAG cannot be pulled anonymously, so the registry would reject server.json. If the package is private, make it public at https://github.com/users/dustinhansen/packages/container/plex-mcp/settings (Danger Zone, Change visibility), then re-run this job with \"Re-run failed jobs\"."
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install mcp-publisher v1.8.1
+        env:
+          URL: https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz
+          SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/mcp-publisher.tar.gz" "$URL"
+          echo "$SHA256  $RUNNER_TEMP/mcp-publisher.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/mcp-publisher.tar.gz" -C "$RUNNER_TEMP" mcp-publisher
+      # Each attempt logs in again, so a registry token minted before a long
+      # wait cannot expire under the publish that follows it.
+      - name: Publish server.json, retrying while npm propagates
+        run: |
+          publish() {
+            "$RUNNER_TEMP/mcp-publisher" login github-oidc && "$RUNNER_TEMP/mcp-publisher" publish
+          }
+          for wait in $BACKOFF; do
+            publish && exit 0
+            echo "publish failed; retrying in ${wait}s"
+            sleep "$wait"
+          done
+          publish

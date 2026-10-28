@@ -1,0 +1,43 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.dustinhansen/plex-mcp",
+  "description": "Full-library Plex access for AI agents: watched state, all-user watch history, safe curation writes.",
+  "repository": {
+    "url": "https://github.com/dustinhansen/plex-mcp",
+    "source": "github"
+  },
+  "version": "0.9.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@dustinhansen/plex-mcp",
+      "version": "0.9.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        { "name": "PLEX_URL", "description": "Plex server base URL, e.g. http://<plex-host>:32400", "isRequired": true },
+        { "name": "PLEX_TOKEN", "description": "Owner/admin X-Plex-Token (run `npx @dustinhansen/plex-mcp login`)", "isRequired": true, "isSecret": true },
+        { "name": "PLEX_ALLOW_PLAYBACK", "description": "Set to 1 to enable play-to-client tools", "isRequired": false },
+        { "name": "PLEX_READ_ONLY", "description": "Set to 1 to register no write or playback tools", "isRequired": false },
+        { "name": "TAUTULLI_URL", "description": "Optional Tautulli base URL", "isRequired": false },
+        { "name": "TAUTULLI_API_KEY", "description": "Optional Tautulli API key", "isRequired": false, "isSecret": true }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/dustinhansen/plex-mcp:v0.9.0",
+      "transport": { "type": "streamable-http", "url": "http://localhost:8627/{MCP_PATH_SECRET}/mcp" },
+      "runtimeArguments": [
+        { "type": "named", "name": "--publish", "value": "127.0.0.1:8627:8627", "description": "Publish the MCP port on loopback only" }
+      ],
+      "environmentVariables": [
+        { "name": "PLEX_URL", "description": "Plex server base URL, e.g. http://<plex-host>:32400 (`npx @dustinhansen/plex-mcp login` prints it)", "isRequired": true },
+        { "name": "PLEX_TOKEN", "description": "Owner/admin X-Plex-Token (run `npx @dustinhansen/plex-mcp login`)", "isRequired": true, "isSecret": true },
+        { "name": "MCP_PATH_SECRET", "description": "The endpoint's only credential: a long random string in the URL path, e.g. from `openssl rand -hex 32`", "isRequired": true, "isSecret": true },
+        { "name": "PLEX_ALLOW_PLAYBACK", "description": "Set to 1 to enable play-to-client tools", "isRequired": false },
+        { "name": "PLEX_READ_ONLY", "description": "Set to 1 to register no write or playback tools", "isRequired": false },
+        { "name": "TAUTULLI_URL", "description": "Optional Tautulli base URL", "isRequired": false },
+        { "name": "TAUTULLI_API_KEY", "description": "Optional Tautulli API key", "isRequired": false, "isSecret": true }
+      ]
+    }
+  ]
+}

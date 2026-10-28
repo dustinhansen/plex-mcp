@@ -1,0 +1,44 @@
+name: Feature request
+description: Ask for a capability the tools don't have yet
+labels: ["needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        plex-mcp keeps its tool surface small on purpose, for the reasons in
+        [Limited surface area](https://github.com/dustinhansen/plex-mcp#limited-surface-area).
+        A request that shows how you'd use the capability is the one most
+        likely to land, often as a parameter on a tool that already exists.
+
+        This is a best-effort project. See
+        [CONTRIBUTING.md](https://github.com/dustinhansen/plex-mcp/blob/main/CONTRIBUTING.md)
+        for what that means.
+
+  - type: textarea
+    id: use
+    attributes:
+      label: What would you use it for?
+      description: >
+        What you'd ask your MCP client to do, and what you'd expect back.
+        A real question you'd ask about your own library is the most useful
+        answer here.
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: What happens when you try it today?
+      description: >
+        Which tools your client reached for and where it fell short, or why
+        none of them fit.
+    validations:
+      required: false
+
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Anything else
+      description: The Plex feature or API it maps to, if you know it, or anything else that seems relevant.
+    validations:
+      required: false

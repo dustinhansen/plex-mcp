@@ -1,0 +1,110 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+  # So a release workflow can run these same checks before it publishes.
+  workflow_call:
+
+# The token can read the checkout and nothing else, and no step reads a
+# secret, so a pull request from a fork runs every check. Nothing here pushes
+# an image, publishes a package or writes to the repository.
+permissions:
+  contents: read
+
+# Cancel a stale run when a PR branch is pushed again; any other run is never
+# cancelled once it has started, though GitHub still replaces a pending run
+# in the same group with a newer one. The group starts with a literal rather
+# than github.workflow: in a called workflow, github.workflow is the caller's
+# name, and a group equal to the caller's own would deadlock.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # The offline suite and the strict type checks. smoke.ts wants a live Plex
+  # and `node --test` does not pick it up. Node 22 matches the image's runtime.
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      # The compile-only fixtures; `npm test` does not include them.
+      - run: npm run test:types
+      - run: npm test
+
+  # The packed npm tarball installed with --omit=dev --offline into a temporary
+  # directory and started over stdio: Node 22 is the engines floor and Node 24
+  # is an LTS line newer than it.
+  artifact-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run test:artifact
+
+  # The image built for each platform on a runner of that architecture, so
+  # arm64 needs no QEMU, then booted against a local Plex fixture. The image
+  # stays on the runner.
+  container-smoke:
+    runs-on: ${{ matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: docker build --platform ${{ matrix.platform }} --tag plex-mcp:smoke .
+      - run: node test/build/emitted-artifact-smoke.ts container --image plex-mcp:smoke --platform ${{ matrix.platform }}
+
+  # server.json checked by the MCP registry's own validate endpoint: the
+  # schema and the registry's semantic rules, with no login and nothing
+  # published. A release publishes the server.json in its tagged commit, so a
+  # rejection there can only be fixed in a new version. The URL and SHA-256
+  # match release.yml's, which the workflow contract test holds them to.
+  server-json:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install mcp-publisher v1.8.1
+        env:
+          URL: https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz
+          SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/mcp-publisher.tar.gz" "$URL"
+          echo "$SHA256  $RUNNER_TEMP/mcp-publisher.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/mcp-publisher.tar.gz" -C "$RUNNER_TEMP" mcp-publisher
+      - run: '"$RUNNER_TEMP/mcp-publisher" validate server.json'

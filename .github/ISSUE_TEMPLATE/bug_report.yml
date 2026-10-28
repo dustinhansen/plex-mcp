@@ -1,0 +1,69 @@
+name: Bug report
+description: Something in the server doesn't work the way it should
+labels: ["needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please don't report security vulnerabilities here. See
+        [SECURITY.md](https://github.com/dustinhansen/plex-mcp/blob/main/SECURITY.md)
+        for the private reporting path.
+
+        This is a best-effort project. See
+        [CONTRIBUTING.md](https://github.com/dustinhansen/plex-mcp/blob/main/CONTRIBUTING.md)
+        for what that means.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect instead?
+      description: >
+        Include the tool you called and any error text. If the error came
+        back through your MCP client, paste it as the client showed you.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport
+      options:
+        - stdio (default)
+        - HTTP (MCP_TRANSPORT=http)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install method
+      options:
+        - npx / npm
+        - Docker
+        - Cloned the repo
+    validations:
+      required: true
+
+  - type: input
+    id: server-version
+    attributes:
+      label: plex-mcp version
+      description: The version in your MCP client's handshake, the npm version you installed, or the Docker image tag.
+    validations:
+      required: true
+
+  - type: input
+    id: plex-version
+    attributes:
+      label: Plex Media Server version
+      description: Plex Web → Settings → General.
+    validations:
+      required: true
+
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Anything else
+      description: Steps to reproduce, MCP client and version, OS, or anything else that seems relevant.
+    validations:
+      required: false

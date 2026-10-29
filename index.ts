@@ -163,9 +163,14 @@ if (mode === "http") {
   process.once("SIGINT", stop);
   const address = httpServer.address();
   if (!address || typeof address === "string") throw new Error("HTTP server did not bind a TCP address");
+  // The secret stays out of the log, but the path shows where it goes, so the
+  // logged URL is one a client can use once the placeholder is filled in.
+  const [endpointPath, authNote] = pathSecret
+    ? ["/<MCP_PATH_SECRET>/mcp", ""]
+    : ["/mcp", ". UNAUTHENTICATED (MCP_ALLOW_NO_AUTH=1)"];
   console.error(
-    `plex-mcp ${version} listening on http://${address.family === "IPv6" ? `[${address.address}]` : address.address}:${address.port}/mcp: ` +
-      `${toolNames.length} tools${surface}${pathSecret ? "" : ". UNAUTHENTICATED (MCP_ALLOW_NO_AUTH=1)"}`
+    `plex-mcp ${version} listening on http://${address.family === "IPv6" ? `[${address.address}]` : address.address}:${address.port}${endpointPath}: ` +
+      `${toolNames.length} tools${surface}${authNote}`
   );
 } else {
   const { server, toolNames } = buildServer(client, options);

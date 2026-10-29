@@ -196,10 +196,11 @@ jobs:
     env:
       BACKOFF: 15 30 60 120 240
     steps:
-      # The registry rejects an image it cannot pull anonymously, and a new GHCR
-      # package is private until someone changes that in its settings page; no
-      # API can. So this asks the same question first, with no login and an
-      # empty credential store, and says what to do when the answer is no. No
+      # The registry rejects an image it cannot pull anonymously. The package
+      # takes this repo's visibility when a workflow creates it, but someone can
+      # make it private later in its settings page, outside this workflow. So
+      # this asks the same question first, with no login and an empty
+      # credential store, and says what to do when the answer is no. No
       # packages: read either: a token would answer a different question. It
       # retries so that one transient GHCR error does not fail the release.
       - name: Check the image is publicly pullable

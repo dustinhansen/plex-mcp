@@ -547,15 +547,52 @@ const cliEnv = (overrides: Record<string, string> = {}) => {
   return Object.assign(env, overrides);
 };
 
+/** The http-mode listening line with a path secret set. It names where the
+ *  secret goes in the URL, never the secret itself. */
+const listeningLine = /listening on http:\/\/(.+):(\d+)\/<MCP_PATH_SECRET>\/mcp: /;
+
 /** Start the CLI in http mode and read the address its listening line reports.
  *  `PORT`, `MCP_HOST` and `HOST` are unset unless `overrides` names them. */
 async function httpListenAddress(overrides: Record<string, string>) {
-  const [, host, port] = await cliStartup(cliEnv(overrides), /listening on http:\/\/(.+):(\d+)\/mcp/);
+  const [, host, port] = await cliStartup(cliEnv(overrides), listeningLine);
   return { host, port: Number(port) };
 }
 
 test("HTTP CLI starts with a 64-character hex path secret", async () => {
-  await cliStartup(cliEnv({ PORT: "0" }), /listening on http:\/\/.+:\d+\/mcp/);
+  await cliStartup(cliEnv({ PORT: "0" }), listeningLine);
+});
+
+/** The whole listening line, matched only once its newline has arrived so a
+ *  line split across stderr chunks is never read half-written. */
+const wholeListeningLine = /(listening on [^\n]*)\n/;
+
+test("HTTP CLI's listening line names the secret's place in the path and never its value, and that path serves MCP", async () => {
+  const cli = await runningCli(cliEnv({ PORT: "0" }), wholeListeningLine);
+  try {
+    const [, line] = cli.match;
+    const [, host, port] = line.match(listeningLine) ?? assert.fail(`unexpected listening line: ${line}`);
+    assert.doesNotMatch(line, /UNAUTHENTICATED/);
+    assert.equal(line.includes(pathSecret), false);
+    const initialize = (path: string) => fetch(`http://${host}:${port}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } } }),
+    });
+    const served = await initialize(`/${pathSecret}/mcp`);
+    assert.equal(served.status, 200);
+    await served.body?.cancel();
+    const bare = await initialize("/mcp");
+    assert.equal(bare.status, 404);
+    await bare.body?.cancel();
+  } finally {
+    cli.child.kill();
+    await cli.exited;
+  }
+});
+
+test("HTTP CLI's listening line names /mcp and says UNAUTHENTICATED with MCP_ALLOW_NO_AUTH=1", async () => {
+  const [, line] = await cliStartup(cliEnv({ PORT: "0", MCP_PATH_SECRET: "", MCP_ALLOW_NO_AUTH: "1" }), wholeListeningLine);
+  assert.match(line, /^listening on http:\/\/.+:\d+\/mcp: \d+ tools\. UNAUTHENTICATED \(MCP_ALLOW_NO_AUTH=1\)$/);
 });
 
 test("HTTP CLI listens on PORT when it is set", async () => {
@@ -598,7 +635,7 @@ async function exitWithin(cli: Awaited<ReturnType<typeof runningCli>>, ms: numbe
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   test(`HTTP CLI exits 0 within 2 seconds of ${signal}`, async () => {
-    const cli = await runningCli(cliEnv({ PORT: "0" }), /listening on http:\/\/.+:\d+\/mcp/);
+    const cli = await runningCli(cliEnv({ PORT: "0" }), listeningLine);
     cli.child.kill(signal);
     assert.deepEqual(await exitWithin(cli, 2_000), { code: 0, signal: null });
   });
@@ -619,7 +656,7 @@ test("HTTP CLI answers a request it accepted before SIGTERM, then exits 0", { ti
   let cli: Awaited<ReturnType<typeof runningCli>> | undefined;
   try {
     const plexPort = (plex.address() as AddressInfo).port;
-    cli = await runningCli(cliEnv({ PORT: "0", PLEX_URL: `http://127.0.0.1:${plexPort}` }), /listening on http:\/\/(.+):(\d+)\/mcp/);
+    cli = await runningCli(cliEnv({ PORT: "0", PLEX_URL: `http://127.0.0.1:${plexPort}` }), listeningLine);
     const [, host, port] = cli.match;
     // A timeout does not stop a test body, so every wait below has to end on
     // its own for the cleanup in `finally` to run. Both fetches take the

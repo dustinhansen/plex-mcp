@@ -6,12 +6,12 @@
     "url": "https://github.com/dustinhansen/plex-mcp",
     "source": "github"
   },
-  "version": "0.9.0",
+  "version": "0.9.1-rc.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@dustinhansen/plex-mcp",
-      "version": "0.9.0",
+      "version": "0.9.1-rc.1",
       "transport": { "type": "stdio" },
       "environmentVariables": [
         { "name": "PLEX_URL", "description": "Plex server base URL, e.g. http://<plex-host>:32400", "isRequired": true },
@@ -24,7 +24,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/dustinhansen/plex-mcp:v0.9.0",
+      "identifier": "ghcr.io/dustinhansen/plex-mcp:v0.9.1-rc.1",
       "transport": { "type": "streamable-http", "url": "http://localhost:8627/{MCP_PATH_SECRET}/mcp" },
       "runtimeArguments": [
         { "type": "named", "name": "--publish", "value": "127.0.0.1:8627:8627", "description": "Publish the MCP port on loopback only" }

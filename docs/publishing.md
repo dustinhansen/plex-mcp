@@ -1,9 +1,9 @@
 # Publishing checklist
 
 This is how I cut a release, top to bottom. A release is a GitHub release
-published by hand. `.github/workflows/release.yml` reacts to it and publishes
-the npm package, the multi-arch image and the MCP registry entry. Nothing
-publishes from `main`.
+published by hand. `.github/workflows/release.yml` reacts to it. It stages the
+npm package and publishes the multi-arch image, then publishes the MCP registry
+entry once I've approved the npm version. Nothing publishes from `main`.
 
 Versions here are written as `<version>` (for example `0.10.0`, or
 `0.10.0-rc.1` for a release candidate) and tags as `v<version>`. Once the bump
@@ -59,15 +59,40 @@ The commands below assume `VERSION` is set this way.
       Check that the run it picks is for `v$VERSION`.
 
       Its jobs run in this order: `ci` (the pull request checks, against the
-      tag), `verify` (the tag against every version field), then `npm` and the
-      two `image-build` legs side by side, `image`, and last `registry`.
+      tag), `verify` (the tag against every version field), then `npm` (which
+      stages the version) and the two `image-build` legs side by side,
+      `image`, and last `registry`, which waits for my approval in step 4.
 
       | release | npm dist-tag | image tags | registry entry |
       |---|---|---|---|
       | final | `latest` | `:v<version>`, and `:latest` moves to it | published |
       | prerelease | `next` | `:v<version>` only | not published |
 
-### 4. Verify what was published
+### 4. Approve the npm version, then the registry job
+
+- [ ] Once the `npm` job is green, approve the staged version. npm asks for
+      2FA:
+
+      ```sh
+      npm stage list @dustinhansen/plex-mcp
+      npm stage approve <stage-id>
+      ```
+
+      Or open the package's **Staged Packages** tab on npmjs.com and approve
+      it there. Check the version and the dist-tag in the list before
+      approving, because the tag can't be changed once the version is staged.
+      `npm stage download <stage-id>` fetches the tarball to look inside it
+      first.
+- [ ] Final releases only: approve the `registry` job. In the run, choose
+      **Review deployments**, check `registry` and choose **Approve and
+      deploy**. Approve npm first. If I approve the job first, its first
+      step waits about 8 minutes for the npm version, then fails and needs a
+      re-run as in Recovery below.
+
+      A prerelease skips the `registry` job, so the npm approval is its only
+      step.
+
+### 5. Verify what was published
 
 - [ ] npm provenance, from an empty directory:
 
@@ -91,7 +116,7 @@ The commands below assume `VERSION` is set this way.
 
       The list includes `$VERSION`.
 
-### 5. Published-artifact smoke
+### 6. Published-artifact smoke
 
 Run once `release.yml` is green. It exercises the artifacts people actually
 download, which catches a broken publish that the pre-publish checks in CI
@@ -121,7 +146,7 @@ cannot see.
       done
       ```
 
-### 6. Recovery
+### 7. Recovery
 
 - **The `registry` job failed.** Re-run that job alone:
 
@@ -130,10 +155,23 @@ cannot see.
   gh run rerun --job "$JOB"
   ```
 
-  Never re-run the whole workflow, and not `--failed` either if `npm` failed
-  too: npm refuses a version it already holds, so the `npm` job would fail
-  again. The job's error names the cause. The usual one is an image GHCR
-  still serves only to signed-in users, fixed on the package's settings page.
+  GitHub asks for the `registry` approval again. Never re-run the whole
+  workflow, and not `--failed` either if `npm` failed too: npm refuses a
+  version it already holds, staged or live, so the `npm` job would fail
+  again. The job's error names the cause. The usual ones are an npm version
+  nobody approved yet, and an image GHCR still serves only to signed-in users,
+  fixed on the package's settings page.
+- **A staged version is wrong**, such as the wrong dist-tag or a broken
+  build. Reject it before anyone approves it. npm asks for 2FA:
+
+  ```sh
+  npm stage reject <stage-id>
+  ```
+
+  Nothing was ever live, so no one installed it. Once the fix is on `main`,
+  stage it as a new patch release through this checklist. Re-running the
+  `npm` job would only stage the same build under the same tag again, since a
+  re-run replays the original release event.
 - **A bad version reached npm.** Deprecate it, never unpublish it:
 
   ```sh
@@ -280,10 +318,35 @@ SHA pinning is what makes "all" safe enough: an action can only run at the
 exact commit a workflow names, which cannot change under it after the
 workflow is reviewed. The workflow contract test enforces the pinning as well.
 
-**No release environment.** I considered one for `release.yml` and rejected
-it. Its `v*` deployment rule repeats what the `release: published` trigger
-already guarantees, and its secret scoping would guard nothing, since trusted
-publishing reads no secret.
+### Registry environment
+
+The `registry` job runs in the `registry` environment. I'm its only required
+reviewer, and only a `v*` tag's run can use it.
+
+```sh
+gh api -X PUT repos/dustinhansen/plex-mcp/environments/registry --input - <<'EOF'
+{
+  "prevent_self_review": false,
+  "reviewers": [{ "type": "User", "id": 455498 }],
+  "deployment_branch_policy": { "protected_branches": false, "custom_branch_policies": true }
+}
+EOF
+gh api -X POST repos/dustinhansen/plex-mcp/environments/registry/deployment-branch-policies \
+  -f name='v*' -f type=tag
+```
+
+`455498` is `dustinhansen`'s user id (`gh api users/dustinhansen --jq .id`).
+Self-review stays allowed because I publish every release and I'm the only
+reviewer, so blocking self-review would leave the job with no one to approve
+it. Both calls can be repeated safely: a second `POST` of the same rule
+returns the one that exists. To re-check, `GET` the environment and
+`repos/dustinhansen/plex-mcp/environments/registry/deployment-branch-policies`.
+
+The environment holds no secrets. It's there for its reviewer: npm sends no
+event when I approve a staged version, so the reviewer is how the `registry`
+job knows to start. A run can wait up to 35 days for that approval. I don't
+put the other jobs in an environment. The `npm` job's gate is npm's own
+approval, and the image jobs have nothing to hold back for.
 
 ### Security
 

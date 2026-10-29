@@ -46,7 +46,9 @@ jobs:
 
   # Trusted publishing, with provenance (publishConfig.provenance refuses a
   # publish without it). npm authenticates through the OIDC exchange alone, so
-  # the job reads no secret.
+  # the job reads no secret. The version is staged, not published: it goes live
+  # only once someone with publish rights approves it on npm with 2FA, which no
+  # workflow can do.
   npm:
     needs: verify
     runs-on: ubuntu-24.04
@@ -58,23 +60,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Node 24 ships the npm that trusted publishing needs. No dependency
-      # cache: a publishing job installs from the lockfile alone.
+      # Node 24 ships an npm new enough for trusted publishing and npm stage.
+      # No dependency cache: a publishing job installs from the lockfile alone.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - name: Check npm can publish through OIDC
+      - name: Check npm can stage through OIDC
         run: |
-          IFS=. read -r major minor patch <<< "$(npm --version)"
-          if (( major < 11 || (major == 11 && (minor < 5 || (minor == 5 && patch < 1))) )); then
-            echo "npm $(npm --version) is older than 11.5.1, the first with trusted publishing" >&2
+          IFS=. read -r major minor _ <<< "$(npm --version)"
+          if (( major < 11 || (major == 11 && minor < 15) )); then
+            echo "npm $(npm --version) is older than 11.15.0, the first with npm stage" >&2
             exit 1
           fi
       - run: npm ci
       - env:
           DIST_TAG: ${{ github.event.release.prerelease && 'next' || 'latest' }}
-        run: npm publish --tag "$DIST_TAG"
+        run: npm stage publish --tag "$DIST_TAG"
 
   # One leg per platform, each on a runner of that architecture so arm64 needs
   # no QEMU. A leg pushes its image by digest only; the image job names it.
@@ -182,20 +184,42 @@ jobs:
 
   # The registry looks up both packages as it validates server.json: the npm
   # version, through npm's propagation lag, and the image, pulled anonymously.
-  # So this waits for both jobs. It is its own job so "Re-run failed jobs" can
-  # retry it alone: npm will not take the same version twice. A prerelease is
-  # never listed. The timeout fits both steps' full backoff, 465s each.
+  # So this waits for both jobs, and for the registry environment's reviewer,
+  # who approves it once the staged npm version is approved and live. It is its
+  # own job so "Re-run failed jobs" can retry it alone: npm will not take the
+  # same version twice. A prerelease is never listed. The timeout fits all
+  # three steps' full backoff, 465s each.
   registry:
     needs: [npm, image]
     if: ${{ !github.event.release.prerelease }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
       id-token: write
+    environment: registry
     env:
       BACKOFF: 15 30 60 120 240
     steps:
+      # The npm job only staged the version, so it is live only if someone
+      # approved it. Approving this job first is the usual slip, and the
+      # registry would otherwise refuse server.json with a less useful error.
+      - name: Check the version is live on npm
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          spec="@dustinhansen/plex-mcp@${TAG#v}"
+          live() {
+            npm view "$spec" version > /dev/null 2>&1
+          }
+          for wait in $BACKOFF; do
+            live && exit 0
+            echo "npm has no $spec yet; retrying in ${wait}s"
+            sleep "$wait"
+          done
+          live && exit 0
+          echo "::error::npm has no $spec, so the registry would reject server.json. Approve the staged version with \"npm stage approve\" or under Staged Packages on npmjs.com, then re-run this job with \"Re-run failed jobs\"."
+          exit 1
       # The registry rejects an image it cannot pull anonymously. The package
       # takes this repo's visibility when a workflow creates it, but someone can
       # make it private later in its settings page, outside this workflow. So

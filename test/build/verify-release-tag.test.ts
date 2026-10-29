@@ -1,5 +1,5 @@
 // The release workflow's verify job, run against the real files and against
-// copies with one field changed, so each field it compares is shown to be read.
+// copies with fields changed, so each field it compares is shown to be read.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -11,7 +11,18 @@ const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const script = fileURLToPath(new URL("../../scripts/verify-release-tag.ts", import.meta.url));
 const files = () => readFiles(repoRoot);
 const version = files().pkg.version!;
+// The flag a correct release of the real version carries, so these tests pass
+// on a release candidate as well as on a final version.
+const prerelease = String(version.includes("-"));
 const entry = (f: ReleaseFiles, registryType: string) => f.server.packages!.find((p) => p.registryType === registryType)!;
+
+// The real files with every version field set to `to`.
+function withVersion(to: string) {
+  const f = files();
+  for (const field of [f.pkg, f.lock, f.lock.packages![""]!, f.server, entry(f, "npm")]) field.version = to;
+  entry(f, "oci").identifier = `ghcr.io/dustinhansen/plex-mcp:v${to}`;
+  return f;
+}
 
 // The script as the workflow runs it, with its exit code and both streams.
 function run(...args: string[]) {
@@ -24,8 +35,8 @@ function run(...args: string[]) {
 }
 
 test("the tag for package.json's version passes", () => {
-  assert.deepEqual(releaseTagViolations(`v${version}`, "false", files()), []);
-  assert.deepEqual(run(`v${version}`, "false"), { code: 0, out: `verify: v${version} matches every version field\n` });
+  assert.deepEqual(releaseTagViolations(`v${version}`, prerelease, files()), []);
+  assert.deepEqual(run(`v${version}`, prerelease), { code: 0, out: `verify: v${version} matches every version field\n` });
 });
 
 test("a tag that differs from package.json's version fails and names every field", () => {
@@ -55,14 +66,14 @@ test("each version field is compared on its own", () => {
   for (const [label, edit] of edits) {
     const changed = files();
     edit(changed);
-    assert.deepEqual(releaseTagViolations(`v${version}`, "false", changed), [`${label} is "0.0.1", not "${version}" from tag "v${version}"`]);
+    assert.deepEqual(releaseTagViolations(`v${version}`, prerelease, changed), [`${label} is "0.0.1", not "${version}" from tag "v${version}"`]);
   }
 });
 
 test("an image under another name is reported whole", () => {
   const changed = files();
   entry(changed, "oci").identifier = `ghcr.io/someone/plex-mcp:v${version}`;
-  assert.deepEqual(releaseTagViolations(`v${version}`, "false", changed), [
+  assert.deepEqual(releaseTagViolations(`v${version}`, prerelease, changed), [
     `server.json image tag (ghcr.io/dustinhansen/plex-mcp:v…) is "ghcr.io/someone/plex-mcp:v${version}", not "${version}" from tag "v${version}"`,
   ]);
 });
@@ -72,16 +83,16 @@ test("a tag that is not v<semver> fails", () => {
 });
 
 test("the prerelease flag has to agree with the version", () => {
-  const rc = files();
-  for (const f of [rc.pkg, rc.lock, rc.lock.packages![""]!, rc.server, entry(rc, "npm")]) f.version = "1.0.0-rc.1";
-  entry(rc, "oci").identifier = "ghcr.io/dustinhansen/plex-mcp:v1.0.0-rc.1";
+  const rc = withVersion("1.0.0-rc.1");
+  const final = withVersion("1.0.0");
 
   assert.deepEqual(releaseTagViolations("v1.0.0-rc.1", "true", rc), []);
   assert.deepEqual(releaseTagViolations("v1.0.0-rc.1", "false", rc), [
     '"1.0.0-rc.1" is a prerelease version but the release is not marked prerelease',
   ]);
-  assert.deepEqual(releaseTagViolations(`v${version}`, "true", files()), [
-    `the release is marked prerelease but "${version}" has no prerelease part`,
+  assert.deepEqual(releaseTagViolations("v1.0.0", "false", final), []);
+  assert.deepEqual(releaseTagViolations("v1.0.0", "true", final), [
+    'the release is marked prerelease but "1.0.0" has no prerelease part',
   ]);
-  assert.deepEqual(releaseTagViolations(`v${version}`, "", files()), [`the release's prerelease flag is "", not "true" or "false"`]);
+  assert.deepEqual(releaseTagViolations("v1.0.0", "", final), [`the release's prerelease flag is "", not "true" or "false"`]);
 });

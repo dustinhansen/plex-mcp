@@ -108,9 +108,9 @@ cannot see.
         sh -c 'node test/build/emitted-artifact-smoke.ts package --tarball /pkg/*.tgz --node22 "$(command -v node)"'
       ```
 - [ ] The image, pulled anonymously for each platform. `docker logout ghcr.io`
-      first, so a stored credential cannot hide a package that is still
-      private. On a single machine the other architecture runs under
-      emulation, which is fine for a boot check:
+      first, so a stored credential cannot hide a private package. On a
+      single machine the other architecture runs under emulation, which is fine
+      for a boot check:
 
       ```sh
       docker logout ghcr.io

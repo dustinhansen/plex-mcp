@@ -316,7 +316,9 @@ release secrets only where an allowlist names them.
 
 `.github/workflows/release.yml` runs only when a GitHub release is published
 by hand. It re-runs the CI checks against the tag, checks the tag against
-every version field, then publishes:
+every version field, then stages the npm version and publishes the image. The
+npm version goes live once I approve it on npm with 2FA. After that I approve
+the `registry` job, which publishes the registry entry:
 
 | release | npm `@dustinhansen/plex-mcp` | image `ghcr.io/dustinhansen/plex-mcp` | MCP registry |
 |---|---|---|---|
@@ -459,8 +461,20 @@ and say what it would let you do.
 Everything we publish comes from a release, never from `main`. We set it up
 that way so the npm package and the image you install can each be traced back
 to the tagged commit that built it (both carry build provenance). A GitHub
-release, published by hand, is the only trigger for `release.yml`, and it
-publishes the npm package, the image and the registry entry together.
+release, published by hand, is the only trigger for `release.yml`, which
+stages the npm package and publishes the image and the registry entry.
+
+The workflow can only stage an npm version, and it goes live once I approve it
+on npm with 2FA. We set it up this way so that a compromised workflow, action
+or GitHub account can't put a version on npm by itself. The registry entry
+needs the npm version live, and npm sends no event when I approve one, so the
+`registry` job runs in a GitHub environment that holds it until I approve it
+there too. That's 2 approvals per final release (a prerelease skips the
+registry), and I'm there for every release anyway. I rejected a separate
+registry workflow started by hand after the npm approval, because it would need
+its own copy of the prerelease guard. I also rejected a job that polls npm
+until the version shows up, because it holds a runner the whole time and fails
+if I'm slow to approve.
 
 I cut releases by hand because release automation such as Release Please
 opens its release PR from a workflow, and GitHub holds the checks on that PR

@@ -452,7 +452,7 @@ const stepLines = (lines: string[]) => lines.map((line) => line.replace(/^( *)- 
 const carriesGuard = (lines: string[], indent: number) => stepLines(lines).includes(`${" ".repeat(indent)}${PRERELEASE_GUARD}`);
 const namesLatest = (lines: string[]) => lines.some((line) => !/^\s*#/.test(line) && line.includes(":latest"));
 const NPM_DIST_TAG = "          DIST_TAG: ${{ github.event.release.prerelease && 'next' || 'latest' }}";
-const NPM_PUBLISH = '        run: npm publish --tag "$DIST_TAG"';
+const NPM_PUBLISH = '        run: npm stage publish --tag "$DIST_TAG"';
 
 function prereleaseViolations(dir: string) {
   if (!workflowFiles(dir).includes(RELEASE)) return [`there is no ${RELEASE}`];
@@ -557,6 +557,36 @@ function registryViolations(dir: string) {
   return violations;
 }
 
+// npm takes a version from this workflow only as staged, and it goes live once
+// someone with publish rights approves it with 2FA. So the npm job runs npm
+// stage publish and no plain npm publish appears anywhere in the file, and the
+// registry job runs in the registry environment, whose required reviewer holds
+// it until that approval. The sweep reads the literal text: a publish spelled
+// some other way is for review to catch.
+const STAGE_PUBLISH = "npm stage publish";
+
+function stagingViolations(dir: string) {
+  if (!workflowFiles(dir).includes(RELEASE)) return [`there is no ${RELEASE}`];
+  const jobs = jobBlocks(readFileSync(join(dir, RELEASE), "utf8"));
+  const violations: string[] = [];
+  const code = (body: string) => body.split("\n").map(withoutComment).join("\n");
+  const npm = jobs.find(({ name }) => name === "npm");
+  if (!npm) violations.push(`${RELEASE} has no npm job`);
+  else if (!code(npm.body).includes(STAGE_PUBLISH)) violations.push(`${RELEASE} job "npm" never runs ${STAGE_PUBLISH}`);
+  for (const job of jobs) {
+    if (/\bnpm publish\b/.test(code(job.body))) violations.push(`${RELEASE} job "${job.name}" runs a plain npm publish`);
+  }
+  const registry = jobs.find(({ name }) => name === "registry");
+  if (!registry) violations.push(`${RELEASE} has no registry job`);
+  else {
+    const environment = childBlock(registry.body, "environment", 4);
+    if (environment === null || withoutComment(environment.inline) !== "registry") {
+      violations.push(`${RELEASE} job "registry" does not wait on the registry environment`);
+    }
+  }
+  return violations;
+}
+
 // ci.yml's server-json job asks the registry to validate server.json with the
 // same mcp-publisher release.yml publishes with: one version's verdict says
 // little about another's. So the job runs validate in a step that can neither
@@ -645,6 +675,10 @@ test("release.yml builds each platform image with metadata-action's OCI labels a
 
 test("release.yml publishes the registry entry only after an anonymous pull of the image", () => {
   assert.deepEqual(registryViolations(workflowsDir), []);
+});
+
+test("release.yml stages the npm version and holds the registry job for approval", () => {
+  assert.deepEqual(stagingViolations(workflowsDir), []);
 });
 
 test("ci.yml validates server.json with the mcp-publisher release.yml publishes with", () => {
@@ -1063,7 +1097,7 @@ const PULL_STEP = (() => {
   const next = source.indexOf("\n      - ", start + 1);
   return source.slice(start, next === -1 ? source.length : next + 1);
 })();
-const REGISTRY_GRANT = `${REGISTRY_GUARD}    runs-on: ubuntu-24.04\n    timeout-minutes: 20\n    permissions:\n      contents: read\n`;
+const REGISTRY_GRANT = `${REGISTRY_GUARD}    runs-on: ubuntu-24.04\n    timeout-minutes: 30\n    permissions:\n      contents: read\n`;
 const REGISTRY_ID_TOKEN = `${REGISTRY_GRANT}      id-token: write\n`;
 const VERIFY_HEADER = "  verify:\n    needs: ci\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n";
 const WORKFLOW_ENV = "env:\n  IMAGE: ghcr.io/dustinhansen/plex-mcp\n";
@@ -1208,10 +1242,39 @@ const RELEASE_MUTATIONS: Mutation[] = [
   ],
   [
     "npm publishes without the chosen dist-tag",
-    'npm publish --tag "$DIST_TAG"',
-    "npm publish",
+    'npm stage publish --tag "$DIST_TAG"',
+    "npm stage publish",
     prereleaseViolations,
     `${RELEASE} job "npm" does not publish a prerelease under next`,
+  ],
+  // npm stages the version, and the registry job waits for its approval.
+  [
+    "npm publishes directly instead of staging",
+    'npm stage publish --tag "$DIST_TAG"',
+    'npm publish --tag "$DIST_TAG"',
+    stagingViolations,
+    [`${RELEASE} job "npm" never runs npm stage publish`, `${RELEASE} job "npm" runs a plain npm publish`],
+  ],
+  [
+    "npm publishes directly after staging",
+    `${NPM_PUBLISH}\n`,
+    `${NPM_PUBLISH}\n      - run: npm publish\n`,
+    stagingViolations,
+    `${RELEASE} job "npm" runs a plain npm publish`,
+  ],
+  [
+    "the registry job loses its environment",
+    "    environment: registry\n",
+    "",
+    stagingViolations,
+    `${RELEASE} job "registry" does not wait on the registry environment`,
+  ],
+  [
+    "the registry job waits on another environment",
+    "    environment: registry\n",
+    "    environment:\n      name: production\n",
+    stagingViolations,
+    `${RELEASE} job "registry" does not wait on the registry environment`,
   ],
   // Each platform image keeps its OCI labels.
   [

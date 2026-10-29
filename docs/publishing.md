@@ -282,9 +282,8 @@ workflow is reviewed. The workflow contract test enforces the pinning as well.
 
 **No release environment.** I considered one for `release.yml` and rejected
 it. Its `v*` deployment rule repeats what the `release: published` trigger
-already guarantees, and its secret scoping only matters while the one-off npm
-token used for the first publish exists. Trusted publishing needs no secret
-after that.
+already guarantees, and its secret scoping would guard nothing, since trusted
+publishing reads no secret.
 
 ### Security
 

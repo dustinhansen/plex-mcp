@@ -373,11 +373,6 @@ function secretViolations(dir: string) {
 const SECRET_ALLOWLIST: SecretRow[] = [
   ["image-build", "GITHUB_TOKEN"],
   ["image", "GITHUB_TOKEN"],
-  // The one-off npm token a package's first publish takes, since trusted
-  // publishing cannot create a package; it needs no secret after that
-  // (docs/publishing.md). Remove this row with the NODE_AUTH_TOKEN env line
-  // once the package exists.
-  ["npm", "NODE_AUTH_TOKEN"],
 ];
 
 const readKey = (job: string, secret: string) => `${job} › ${secret}`;
@@ -1105,11 +1100,18 @@ const RELEASE_MUTATIONS: Mutation[] = [
     `${RELEASE} job "verify" reads the secret EXTRA_TOKEN, which is not on the secret allowlist`,
   ],
   [
-    "the npm job reads a new secret beside its token",
+    "the npm job reads a new secret",
     NPM_ENV,
     `${NPM_ENV}          EXTRA: \${{ secrets.EXTRA_TOKEN }}\n`,
     releaseSecretViolations,
     `${RELEASE} job "npm" reads the secret EXTRA_TOKEN, which is not on the secret allowlist`,
+  ],
+  [
+    "the npm job reads an npm token",
+    NPM_ENV,
+    `${NPM_ENV}          NODE_AUTH_TOKEN: \${{ secrets.NODE_AUTH_TOKEN }}\n`,
+    releaseSecretViolations,
+    `${RELEASE} job "npm" reads the secret NODE_AUTH_TOKEN, which is not on the secret allowlist`,
   ],
   [
     "a secret is read in the workflow-level env",

@@ -45,9 +45,8 @@ jobs:
         run: node scripts/verify-release-tag.ts "$TAG" "$PRERELEASE"
 
   # Trusted publishing, with provenance (publishConfig.provenance refuses a
-  # publish without it). npm tries the OIDC exchange first and falls back to
-  # NODE_AUTH_TOKEN: trusted publishing cannot create a package, so a
-  # package's first version goes up with a one-off token.
+  # publish without it). npm authenticates through the OIDC exchange alone, so
+  # the job reads no secret.
   npm:
     needs: verify
     runs-on: ubuntu-24.04
@@ -74,7 +73,6 @@ jobs:
           fi
       - run: npm ci
       - env:
-          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
           DIST_TAG: ${{ github.event.release.prerelease && 'next' || 'latest' }}
         run: npm publish --tag "$DIST_TAG"
 

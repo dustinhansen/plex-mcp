@@ -86,7 +86,7 @@ The secret travels in the URL, so the client needs no other authentication.
 Leave OAuth unset, or choose the no-authentication option where the client
 offers one. Each vendor's docs say where custom servers are added:
 [claude.ai](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp),
-[ChatGPT](https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt).
+[ChatGPT](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt).
 
 Keeping an Option A entry alongside this is reasonable in a client that has
 both: it shows up as a duplicate `plex` tool set, but keeps working if the

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- In http mode with `MCP_PATH_SECRET` set, the startup line names the
+  endpoint as `/<MCP_PATH_SECRET>/mcp`. It used to name `/mcp`, which
+  answers 404 whenever a secret is set. The secret's value stays out of the
+  log.
+
 ## 0.9.0 — 2026-10-28
 
 Initial public release.

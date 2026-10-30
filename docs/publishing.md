@@ -148,6 +148,34 @@ cannot see.
 
 ### 7. Recovery
 
+- **The `npm` job failed.** First check whether npm holds the version, staged
+  or live:
+
+  ```sh
+  npm stage list @dustinhansen/plex-mcp
+  npm view "@dustinhansen/plex-mcp@<version>" version
+  ```
+
+  If both show nothing (the list has no entry for the version, and `npm view`
+  fails with `E404`), the job failed before npm held the version, so re-run
+  the failed jobs:
+
+  ```sh
+  gh run rerun <run-id> --failed
+  ```
+
+  Then approve the staged version as in step 4. On a final release the re-run
+  also starts the `registry` job, which the failure skipped, so GitHub asks for
+  its approval too.
+
+  If either command shows the version, npm holds it and a re-run would fail.
+  Follow "A staged version is wrong" below when it is only staged, and "A bad
+  version reached npm" when it is live.
+
+  A known transient cause is `TLOG_CREATE_ENTRY_ERROR` (409) from
+  `npm stage publish`. The provenance write to the transparency log landed,
+  its reply was lost, and npm's retry collided with its own entry, so npm
+  never staged the version and a re-run stages it with provenance.
 - **The `registry` job failed.** Re-run that job alone:
 
   ```sh
@@ -156,11 +184,10 @@ cannot see.
   ```
 
   GitHub asks for the `registry` approval again. Never re-run the whole
-  workflow, and not `--failed` either if `npm` failed too: npm refuses a
-  version it already holds, staged or live, so the `npm` job would fail
-  again. The job's error names the cause. The usual ones are an npm version
-  nobody approved yet, and an image GHCR still serves only to signed-in users,
-  fixed on the package's settings page.
+  workflow: npm refuses a version it already holds, staged or live, so the
+  `npm` job would fail again. The job's error names the cause. The usual ones
+  are an npm version nobody approved yet, and an image GHCR still serves only
+  to signed-in users, fixed on the package's settings page.
 - **A staged version is wrong**, such as the wrong dist-tag or a broken
   build. Reject it before anyone approves it. npm asks for 2FA:
 

@@ -375,6 +375,53 @@ job knows to start. A run can wait up to 35 days for that approval. I don't
 put the other jobs in an environment. The `npm` job's gate is npm's own
 approval, and the image jobs have nothing to hold back for.
 
+### npm package
+
+The trusted publisher lets `release.yml` stage a version and nothing more.
+It and the publishing-access setting are on the package's Settings page on
+npmjs.com (npmjs.com/package/@dustinhansen/plex-mcp → **Settings**) under
+**Trusted Publisher** and **Publishing access**, and both have an npm CLI
+command. `npm trust` needs an npm login on an account with 2FA turned on.
+
+**Trusted Publisher:** GitHub Actions, repository `dustinhansen/plex-mcp`,
+workflow `release.yml`, no environment name. The only allowed action is
+`npm stage publish`. "Allow `npm publish`" and "Allow `npm dist-tag`" are
+unchecked.
+
+```sh
+npm trust github @dustinhansen/plex-mcp \
+  --repo dustinhansen/plex-mcp --file release.yml --allow-stage-publish
+npm trust list @dustinhansen/plex-mcp
+```
+
+`npm trust github` fails while the package already has a trusted publisher, so
+run `npm trust list` first. `--allow-publish` is off unless you pass it. There
+is no flag for "Allow `npm dist-tag`", so check on the Settings page that it is
+unchecked.
+
+"Allow `npm publish`" is the setting the staged release depends on. With it
+checked, `release.yml` could publish a version directly and skip my approval in
+step 4. npm doesn't let you edit a trusted publisher, and a package holds only
+one, so changing any field means `npm trust revoke --id <id>` (the id is in
+`npm trust list`) and creating it again. **When you recreate the trusted
+publisher, make sure "Allow `npm publish`" is unchecked**, and read it back
+afterwards.
+
+The publisher names no environment because the `npm` job runs outside one.
+Its gate is npm's own approval, as Registry environment above explains.
+
+**Publishing access:** "Require two-factor authentication and disallow bypass
+2fa tokens (recommended)".
+
+```sh
+npm access set mfa=publish @dustinhansen/plex-mcp
+```
+
+`mfa=publish` is that option: 2FA is required and no token can bypass it.
+`mfa=automation` would let a bypass token publish without 2FA. Trusted
+publishing goes through OIDC, not a token, so this setting doesn't block the
+`npm` job.
+
 ### Security
 
 Private vulnerability reporting is on, and so is secret scanning with push

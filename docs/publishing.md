@@ -168,14 +168,47 @@ cannot see.
   also starts the `registry` job, which the failure skipped, so GitHub asks for
   its approval too.
 
-  If either command shows the version, npm holds it and a re-run would fail.
-  Follow "A staged version is wrong" below when it is only staged, and "A bad
-  version reached npm" when it is live.
-
   A known transient cause is `TLOG_CREATE_ENTRY_ERROR` (409) from
   `npm stage publish`. The provenance write to the transparency log landed,
   its reply was lost, and npm's retry collided with its own entry, so npm
   never staged the version and a re-run stages it with provenance.
+
+  If either command shows the version, npm holds it and a re-run would fail.
+  When it is live, follow "A bad version reached npm" below. When it is only
+  staged, check it as in step 4: the version, the dist-tag (`next` for a
+  release candidate, `latest` for a final release) and, with
+  `npm stage download`, the tarball. If any of them is wrong, follow "A staged
+  version is wrong" below. If all of them are right, npm stored the version
+  and the job failed after that, so approve it as in step 4.
+
+  On a final release the failure also skipped the `registry` job, and
+  "Re-run failed jobs" would start `npm` again, which fails on a version npm
+  holds, so publish the registry entry by hand. Once the approved version is
+  live, run this from a checkout with no local changes, since `publish` reads
+  the checked-out `server.json`. It uses the `mcp-publisher` that
+  `release.yml` pins, checked against the release's checksums:
+
+  ```sh
+  git switch --detach "v<version>"
+  npm view "@dustinhansen/plex-mcp@<version>" version
+  MCP=$(sed -n 's|.*registry/releases/download/\(v[0-9.]*\)/mcp-publisher.*|\1|p' .github/workflows/release.yml)
+  OSARCH="$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+  BIN=$(mktemp -d)
+  gh release download "$MCP" --repo modelcontextprotocol/registry --dir "$BIN" \
+    --pattern "mcp-publisher_$OSARCH.tar.gz" --pattern "registry_${MCP#v}_checksums.txt"
+  (cd "$BIN" && grep " mcp-publisher_$OSARCH.tar.gz\$" "registry_${MCP#v}_checksums.txt" \
+    | shasum -a 256 -c && tar -xzf "mcp-publisher_$OSARCH.tar.gz" mcp-publisher)
+  "$BIN/mcp-publisher" login github
+  "$BIN/mcp-publisher" publish
+  ```
+
+  `login github` signs in with GitHub as `dustinhansen`, the account the
+  registry lets publish under `io.github.dustinhansen`. The registry rejects
+  `server.json` while the npm version isn't live or the image can't be pulled
+  anonymously, which are the checks the `registry` job makes first. npm can
+  take a few minutes to serve a newly approved version, so if `publish` fails
+  on the npm lookup, wait and run it again. The release run stays red, since
+  nothing re-ran `registry`. Check the listing as in step 5.
 - **The `registry` job failed.** Re-run that job alone:
 
   ```sh

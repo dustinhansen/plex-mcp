@@ -45,15 +45,15 @@ jobs:
       - run: npm test
 
   # The packed npm tarball installed with --omit=dev --offline into a temporary
-  # directory and started over stdio: Node 22 is the engines floor and Node 24
-  # is an LTS line newer than it.
+  # directory and started over stdio: Node 22 is the engines floor, and Node 24
+  # and Node 26 are LTS lines newer than it.
   artifact-smoke:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        node: [22, 24]
+        node: [22, 24, 26]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

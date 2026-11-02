@@ -344,6 +344,12 @@ match, except unwatched and unrated. Unwatched plus watched must equal the
 whole library, and so must unrated plus rated. When the server has nothing to
 test a filter with, the check logs a skip line naming the filter.
 
+plex-mcp is developed with AI coding assistants (mostly Claude Code). Every
+change lands through a pull request, and every job in [CI](#ci-and-releases) is
+a required check on `main`. That covers the type checks, the offline
+test suite, the npm package and container smoke tests, and the MCP registry's
+check of `server.json`.
+
 [CHANGELOG.md](CHANGELOG.md) tracks releases.
 
 ## Design notes

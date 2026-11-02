@@ -30,6 +30,10 @@ as issues. Open an issue first, using the bug report template, before you
 write the fix. That way we agree it's a bug and agree on the shape of the fix
 before you spend the time.
 
+AI-assisted pull requests are welcome, as long as you've read and tested
+what you're submitting. My own changes are built with AI help too, and they're
+held to the same bar.
+
 I'm not taking unsolicited new tools or features. I keep the tool surface
 small on purpose, because a set of tools a model can hold in context beats
 exhaustive coverage of the Plex API. A request for new capability starts with

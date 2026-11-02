@@ -323,6 +323,7 @@ gh api -X POST repos/dustinhansen/plex-mcp/rulesets --input - <<'EOF'
           { "context": "build", "integration_id": 15368 },
           { "context": "artifact-smoke (22)", "integration_id": 15368 },
           { "context": "artifact-smoke (24)", "integration_id": 15368 },
+          { "context": "artifact-smoke (26)", "integration_id": 15368 },
           { "context": "container-smoke (linux/amd64)", "integration_id": 15368 },
           { "context": "container-smoke (linux/arm64)", "integration_id": 15368 },
           { "context": "server-json", "integration_id": 15368 }

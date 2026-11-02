@@ -277,6 +277,7 @@ const CHECK_NAMES = [
   "build",
   "artifact-smoke (22)",
   "artifact-smoke (24)",
+  "artifact-smoke (26)",
   "container-smoke (linux/amd64)",
   "container-smoke (linux/arm64)",
   "server-json",
@@ -767,7 +768,7 @@ const CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 const BUILD_HEADER = "  build:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 15\n";
 const NPM_TEST = "      - run: npm test\n";
 const DEFAULT_TOKEN = "permissions:\n  contents: read\n";
-const ARTIFACT_MATRIX = "        node: [22, 24]\n";
+const ARTIFACT_MATRIX = "        node: [22, 24, 26]\n";
 const checkNames = (names: string[]) => `${CI}'s checks are [${names.join(", ")}] rather than [${CHECK_NAMES.join(", ")}]`;
 
 // Each row is one weakening of the real ci.yml, the sweep that must catch it,
@@ -944,9 +945,9 @@ const MUTATIONS: Mutation[] = [
   [
     "a Node version leaves the artifact-smoke matrix",
     ARTIFACT_MATRIX,
-    "        node: [22]\n",
+    "        node: [22, 24]\n",
     checkNameViolations,
-    checkNames(CHECK_NAMES.filter((name) => name !== "artifact-smoke (24)")),
+    checkNames(CHECK_NAMES.filter((name) => name !== "artifact-smoke (26)")),
   ],
   [
     "the arm64 leg leaves the container-smoke matrix",

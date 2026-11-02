@@ -298,8 +298,8 @@ to `main` and on demand, on GitHub-hosted runners only:
 - `build`: the type checks, the compile-only type fixtures and the offline
   test suite (`npm test`), on Node 22.
 - `artifact-smoke`: the packed npm tarball installed with `--omit=dev
-  --offline` and started over stdio, on Node 22 (the `engines` floor) and
-  Node 24 (an LTS line newer than the floor).
+  --offline` and started over stdio, on Node 22 (the `engines` floor),
+  Node 24 and Node 26 (LTS lines newer than the floor).
 - `container-smoke`: the image built for `linux/amd64` and `linux/arm64`,
   each on a runner of that architecture with no emulation, then booted
   against a local Plex fixture.

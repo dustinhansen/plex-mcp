@@ -174,19 +174,41 @@ cannot see.
   never staged the version and a re-run stages it with provenance.
 
   If either command shows the version, npm holds it and a re-run would fail.
-  When it is live, follow "A bad version reached npm" below. When it is only
-  staged, check it as in step 4: the version, the dist-tag (`next` for a
-  release candidate, `latest` for a final release) and, with
+  When it is only staged, check it as in step 4: the version, the dist-tag
+  (`next` for a release candidate, `latest` for a final release) and, with
   `npm stage download`, the tarball. If any of them is wrong, follow "A staged
   version is wrong" below. If all of them are right, npm stored the version
   and the job failed after that, so approve it as in step 4.
 
-  On a final release the failure also skipped the `registry` job, and
-  "Re-run failed jobs" would start `npm` again, which fails on a version npm
-  holds, so publish the registry entry by hand. Once the approved version is
-  live, run this from a checkout with no local changes, since `publish` reads
-  the checked-out `server.json`. It uses the `mcp-publisher` that
-  `release.yml` pins, checked against the release's checksums:
+  When it is live, someone already approved the staged version, for example on
+  npmjs.com before reading the failed run. Check its provenance as in step 5
+  (with `VERSION` set as at the top of this doc), and check which dist-tag
+  points at it:
+
+  ```sh
+  npm view @dustinhansen/plex-mcp dist-tags
+  ```
+
+  The tag named above should point at `<version>`. If the provenance doesn't
+  verify, follow "A bad version reached npm" below. If only the tag is wrong,
+  the build is fine and deprecating the version would not move the tag, so
+  move it instead. npm asks for 2FA:
+
+  ```sh
+  npm dist-tag add "@dustinhansen/plex-mcp@<version>" <right-tag>
+  ```
+
+  A release candidate that took `latest` also needs `latest` pointed back at
+  the last final release with the same command. Once both checks pass, a
+  release candidate needs no more recovery.
+
+  On a final release whose version passed those checks, the failure also
+  skipped the `registry` job, and "Re-run failed jobs" would start `npm`
+  again, which fails on a version npm holds, so publish the registry entry by
+  hand. Once the approved version is live, run this from a checkout with no
+  local changes, since `publish` reads the checked-out `server.json`. It uses
+  the `mcp-publisher` that `release.yml` pins, checked against the release's
+  checksums:
 
   ```sh
   git switch --detach "v<version>"

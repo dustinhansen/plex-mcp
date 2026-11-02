@@ -1,10 +1,11 @@
 # Changelog
 
-## 0.9.1-rc.1 — 2026-10-29
+## 0.9.1 — 2026-11-02
 
 - npm versions are now staged when a release is published, and go live
   once I approve them. Nothing about how the server behaves changes with
   this.
+- CI now tests the packed npm package on Node 26 as well as Node 22 and 24.
 - In http mode with `MCP_PATH_SECRET` set, the startup line names the
   endpoint as `/<MCP_PATH_SECRET>/mcp`. It used to name `/mcp`, which
   answers 404 whenever a secret is set. The secret's value stays out of the

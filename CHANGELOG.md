@@ -8,6 +8,10 @@
   that contains it, so `genre: "Action"` can match "Action & Adventure",
   and `filters` now shows that. A call with none of those filters has no
   `filters` key.
+- `plex-mcp login --write` refuses a value that starts with `-`. It prints
+  its usage line and exits 2, as it already did when nothing followed it.
+  It used to take the value as the file name, so `login --write --foo`
+  appended your token to a file called `--foo`.
 
 ## 0.9.1 — 2026-11-02
 

@@ -34,7 +34,8 @@ npx @dustinhansen/plex-mcp login
 It prints a link, waits for you to approve it in the browser, then prints
 `PLEX_URL=…` and `PLEX_TOKEN=…`. Add `--write <file>` to append both lines to
 a file as well. The file holds your token, so on macOS and Linux a new one is
-created readable by you only. An existing file keeps its permissions. (Prefer
+created readable by you only. An existing file keeps its permissions.
+`--write` refuses a file name that starts with `-`, so pass it as `./-name`. (Prefer
 the manual route? Plex Web → play any item → ⋮ → Get Info → View XML →
 `X-Plex-Token` in the URL.)
 

@@ -48,7 +48,9 @@ if (process.argv[2] === "--version") {
 if (process.argv[2] === "login") {
   const writeFlag = process.argv.indexOf("--write");
   const writeTo = writeFlag > -1 ? process.argv[writeFlag + 1] : undefined;
-  if (writeFlag > -1 && !writeTo) { console.error("usage: plex-mcp login [--write <file>]"); process.exit(2); }
+  // A value that starts with "-" is read as a flag, not a file name, so a
+  // mistyped flag never gets the token appended to a file named after it.
+  if (writeFlag > -1 && (!writeTo || writeTo.startsWith("-"))) { console.error("usage: plex-mcp login [--write <file>]"); process.exit(2); }
   try {
     await runLogin({ plextv: makePlexTv({ version }), out: console.log, writeTo });
     process.exit(0);

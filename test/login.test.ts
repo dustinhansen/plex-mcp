@@ -1,8 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { chmod, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { runLogin, pickServerUrl } from "#dist/lib/login.js";
 import type { PlexTvClient, PlexTvResource } from "#dist/types/boundaries.js";
 
@@ -85,3 +87,19 @@ test("runLogin: no servers still prints the token", async () => {
   assert.match(h.out.join("\n"), /PLEX_TOKEN=tok/);
   assert.match(h.out.join("\n"), /no servers/i);
 });
+
+const indexPath = fileURLToPath(new URL("../dist/index.js", import.meta.url));
+// The CLI builds its own plex.tv client, so the child gets a fetch that refuses
+// instead. If the check ever stops firing, the test fails fast and offline.
+const offline = "data:text/javascript,globalThis.fetch=()=>Promise.reject(new Error('offline'))";
+
+for (const [label, args] of [["a flag-shaped value", ["--write", "--foo"]], ["no value", ["--write"]]] as const) {
+  test(`login --write with ${label} prints the usage line, exits 2 and creates no file`, async (t) => {
+    const dir = await mkdtemp(join(tmpdir(), "plex-mcp-login-"));
+    t.after(() => rm(dir, { recursive: true, force: true }));
+    const child = spawnSync(process.execPath, ["--import", offline, indexPath, "login", ...args], { cwd: dir, encoding: "utf8", timeout: 10_000 });
+    assert.equal(child.status, 2);
+    assert.equal(child.stderr.trim(), "usage: plex-mcp login [--write <file>]");
+    assert.deepEqual(await readdir(dir), []);
+  });
+}

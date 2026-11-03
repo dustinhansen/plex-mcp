@@ -308,9 +308,11 @@ gh api -X POST repos/dustinhansen/plex-mcp/rulesets --input - <<'EOF'
       "parameters": {
         "required_approving_review_count": 0,
         "dismiss_stale_reviews_on_push": false,
+        "required_reviewers": [],
         "require_code_owner_review": false,
         "require_last_push_approval": false,
         "required_review_thread_resolution": false,
+        "require_extra_approval_for_unattributed_changes": false,
         "allowed_merge_methods": ["squash"]
       }
     },
@@ -337,7 +339,9 @@ EOF
 
 Check it with `gh api repos/dustinhansen/plex-mcp/rulesets`. To change an
 existing ruleset, send the same body with `-X PUT` to
-`repos/dustinhansen/plex-mcp/rulesets/<id>`.
+`repos/dustinhansen/plex-mcp/rulesets/<id>`. A `PUT` can keep the live value
+of a rule parameter the body leaves out, so the body names every parameter of
+the `pull_request` rule, defaults included.
 
 ### Merges
 

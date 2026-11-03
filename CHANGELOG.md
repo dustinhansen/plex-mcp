@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- `list_media` and `random_pick` return a `filters` object naming what
+  each `genre`, `collection`, `country` or `studio` filter matched. A name
+  that matches nothing exactly (ignoring case) falls back to the first one
+  that contains it, so `genre: "Action"` can match "Action & Adventure",
+  and `filters` now shows that. A call with none of those filters has no
+  `filters` key.
+
 ## 0.9.1 — 2026-11-02
 
 - npm versions are now staged when a release is published, and go live

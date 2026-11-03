@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { listParams, sectionKind } from "./filters.js";
 import { itemDict, isWatched, iso, mins } from "./format.js";
-import { DETAIL_CAP_CLAUSE, DETAIL_FIELDS_PHRASE, effLimit, FILTER_SCHEMA, HOME_USER_SCHEMA, resolveFilterTags, withCollections } from "./tools-read.js";
+import { DETAIL_CAP_CLAUSE, DETAIL_FIELDS_PHRASE, effLimit, FILTER_SCHEMA, FILTERS_RESULT_CLAUSE, HOME_USER_SCHEMA, resolveFilterTags, withCollections } from "./tools-read.js";
 import { defineTool, PLEX_ID, READ_ONLY } from "../types/tool-registration.js";
 import type { PlexClient, PlexMetadata } from "../types/boundaries.js";
 
@@ -51,7 +51,7 @@ export function discoverTools(root: PlexClient) {
         "decade, maxDurationMin etc. user picks as a Plex Home user, so unwatched " +
         "means unwatched by them. Each pick is the record list_media returns " +
         "(title, year, watched state, genres, duration and so on). detail=true " +
-        `adds ${DETAIL_FIELDS_PHRASE} so you can explain the pick.`,
+        `adds ${DETAIL_FIELDS_PHRASE} so you can explain the pick. ${FILTERS_RESULT_CLAUSE}`,
       inputSchema: {
         ...FILTER_SCHEMA,
         count: z.number().int().min(1).max(10).default(3),
@@ -62,11 +62,11 @@ export function discoverTools(root: PlexClient) {
         const client = await root.as(args.user);
         const section = await client.sectionByTitle(args.library);
         const kind = args.kind ?? sectionKind(section.type);
-        const tagIds = await resolveFilterTags(client, section.key, args);
+        const { tagIds, filters } = await resolveFilterTags(client, section.key, args);
         const params = listParams({ ...args, kind, sort: "random" }, tagIds);
         const listing = await client.plex(`/library/sections/${section.key}/all`, params, { start: 0, size: args.count });
         const container = args.detail ? await withCollections(client, listing) : listing;
-        return { library: section.title, picks: (container.Metadata ?? []).map((item) => itemDict(item, args.detail)) };
+        return { library: section.title, ...(filters && { filters }), picks: (container.Metadata ?? []).map((item) => itemDict(item, args.detail)) };
       },
     }),
 

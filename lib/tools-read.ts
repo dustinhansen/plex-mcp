@@ -39,16 +39,28 @@ export const FILTER_SCHEMA = {
 /** Resolve the name-based filters (genre etc.) to the values Plex filters on:
  *  a tag id, or for studio the studio's own name. Studio is a plain field, not
  *  a tag. Plex lists each studio's key as its name URL-encoded twice, and the
- *  filter matches only the name itself. */
-export async function resolveFilterTags(client: PlexClient, sectionKey: string, args: Record<string, unknown>): Promise<Record<string, string>> {
+ *  filter matches only the name itself.
+ *  `filters` names what each one resolved to, so a caller can see when the
+ *  resolver's substring fallback picked something other than what was asked.
+ *  It is absent when no tag filter was given. */
+export async function resolveFilterTags(
+  client: PlexClient, sectionKey: string, args: Record<string, unknown>,
+): Promise<{ tagIds: Record<string, string>; filters?: Record<string, string> }> {
   const tagIds: Record<string, string> = {};
+  const filters: Record<string, string> = {};
   for (const field of ["genre", "collection", "country", "studio"]) {
     if (typeof args[field] !== "string") continue;
     const hit = await client.resolveSectionTag(sectionKey, field, args[field]);
     tagIds[field] = field === "studio" ? hit.name : hit.id;
+    filters[field] = hit.name;
   }
-  return tagIds;
+  return Object.keys(filters).length ? { tagIds, filters } : { tagIds };
 }
+
+/** How list_media and random_pick describe the `filters` key in their result. */
+export const FILTERS_RESULT_CLAUSE =
+  "The result's filters object names what each genre/collection/country/studio " +
+  "filter matched: the same name ignoring case first, else the first one containing it.";
 
 const pageSchema = {
   offset: z.number().int().min(0).default(0),
@@ -171,6 +183,7 @@ export function readTools(root: PlexClient) {
         "rated filters on the owner's star rating (userRating, 1-10 internal scale). " +
         "Movie records carry userRating, and sort=userRating asc puts unrated first. " +
         `Filters combine (AND). Paginate with offset/limit. ${DETAIL_FIELDS_CLAUSE} ` +
+        `${FILTERS_RESULT_CLAUSE} ` +
         "kind=collection lists a section's collections only. Other filters/sort are " +
         "ignored for collections.",
       inputSchema: {
@@ -189,11 +202,11 @@ export function readTools(root: PlexClient) {
           return page(container, args.offset, args.detail, args.fields);
         }
         const kind = args.kind ?? sectionKind(section.type);
-        const tagIds = await resolveFilterTags(client, section.key, args);
+        const { tagIds, filters } = await resolveFilterTags(client, section.key, args);
         const container = await client.plex(`/library/sections/${section.key}/all`, listParams({ ...args, kind }, tagIds), {
           start: args.offset, size: limit,
         });
-        return page(args.detail ? await withCollections(client, container) : container, args.offset, args.detail, args.fields);
+        return { ...(filters && { filters }), ...page(args.detail ? await withCollections(client, container) : container, args.offset, args.detail, args.fields) };
       },
     }),
 

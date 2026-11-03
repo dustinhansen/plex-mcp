@@ -310,6 +310,36 @@ test("list_media: a tag filter is trimmed before it is resolved", async () => {
   assert.equal(calls.at(-1)!.query.genre, "7");
 });
 
+test("list_media and random_pick: filters names the tag each filter resolved to, and is absent with no tag filter", async () => {
+  const { client } = plexServer({
+    "/library/sections": SECTIONS,
+    "/library/sections/1/genre": { size: 2, Directory: [{ key: "7", title: "Drama" }, { key: "9", title: "Action & Adventure" }] },
+    "/library/sections/1/studio": { size: 1, Directory: [{ key: "Lionsgate%2520Films", title: "Lionsgate Films" }] },
+    "/library/sections/1/all": { size: 1, totalSize: 1, Metadata: [ARRIVAL] },
+  });
+  for (const tool of ["list_media", "random_pick"]) {
+    // An exact match reports the tag's own title, which differs from the argument only in case.
+    const exact = JSON.parse((await callTool(client, tool, { genre: "drama" })).text);
+    assert.deepEqual(exact.filters, { genre: "Drama" }, tool);
+    // A substring match reports the tag the fallback picked.
+    const near = JSON.parse((await callTool(client, tool, { genre: "Action", studio: "lionsgate" })).text);
+    assert.deepEqual(near.filters, { genre: "Action & Adventure", studio: "Lionsgate Films" }, tool);
+    const none = JSON.parse((await callTool(client, tool, { decade: "2010s" })).text);
+    assert.equal("filters" in none, false, tool);
+  }
+});
+
+test("list_media: fields projection leaves filters at the top level, out of each record", async () => {
+  const { client } = plexServer({
+    "/library/sections": SECTIONS,
+    "/library/sections/1/genre": { size: 1, Directory: [{ key: "7", title: "Drama" }] },
+    "/library/sections/1/all": { size: 1, totalSize: 1, Metadata: [ARRIVAL] },
+  });
+  const out = JSON.parse((await callTool(client, "list_media", { genre: "drama", fields: ["title", "filters"] })).text);
+  assert.deepEqual(out.filters, { genre: "Drama" });
+  assert.deepEqual(out.items, [{ ratingKey: "10", title: "Arrival" }]);
+});
+
 test("person_credits: a writer index Plex answers 404 for is named as missing from the library", async () => {
   const { client, calls } = plexServer({ "/library/sections": SECTIONS });
   await assert.rejects(async () => readTools(client).person_credits.handler({

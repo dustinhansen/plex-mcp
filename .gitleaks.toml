@@ -1,0 +1,16 @@
+# gitleaks config for a hand-run scan: `gitleaks git .` or `gitleaks dir .`.
+# It keeps every default rule and allows one known fixture.
+
+[extend]
+useDefault = true
+
+# The test path secret in test/server.test.ts is 0123456789abcdef repeated, the
+# shape `openssl rand -hex 32` makes. All 3 conditions must hold: the
+# generic-api-key rule, that file and that value. Without targetRules, a global
+# allowlist with paths would skip the whole file for every rule.
+[[allowlists]]
+description = "pathSecret test fixture"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^test/server\.test\.ts$''']
+regexes = ['''^0123456789abcdef$''']

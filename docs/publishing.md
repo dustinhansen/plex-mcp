@@ -33,6 +33,9 @@ The commands below assume `VERSION` is set this way.
 - [ ] `npm test`. It checks that the handshake, both `server.json` version
       fields and the image tag agree with `package.json`.
 - [ ] `npm run smoke` against a server you are allowed to change.
+- [ ] `gitleaks git .` reports no leaks. The README's
+      [Secret scanning](../README.md#secret-scanning) note says what
+      `.gitleaks.toml` allows.
 - [ ] Open the PR, let CI go green, and merge it.
 
 ### 2. Cut the GitHub release

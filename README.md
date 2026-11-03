@@ -548,6 +548,19 @@ because a curated rewrite is too easy to get wrong, and a force-push doesn't
 scrub what a host keeps on its own, such as the refs of closed pull requests.
 Changes after 0.9.0 land as pull requests in this repository.
 
+### Secret scanning
+
+GitHub's secret scanning with push protection is the gate for secrets here,
+so a push carrying a known token shape is blocked before it reaches the
+repository. gitleaks is a check I run by hand before a release, and it has no
+CI job. We made this decision because a CI job would mostly look for the same
+token shapes push protection already blocks. The main thing gitleaks adds is
+its `generic-api-key` rule, and in this repository's history that rule has only
+flagged a test fixture. `.gitleaks.toml` allows that one fixture (the path
+secret in `test/server.test.ts`, matched by rule, file and value) and keeps
+every default rule, so `gitleaks git .` and `gitleaks dir .` both report no
+leaks. Treat any finding as real until you've checked it.
+
 ### Default port
 
 The default port is 8627. I wanted this service to have its own default port.

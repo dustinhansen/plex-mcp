@@ -215,6 +215,10 @@ A named grouping of items within a single library, which Plex surfaces as a
 browsable entry in that library. Deleting one removes the grouping only.
 _Avoid_: set, group
 
+**Smart collection**:
+A collection Plex fills from a saved query. Most have no tag, so the `collection`
+filter can't list them, and `get_children` is the way to read their members.
+
 **Label**:
 A name attached to an item in Plex, which a library can be filtered on. Unlike
 a collection, it isn't a browsable entry. Plex lists every label on the server

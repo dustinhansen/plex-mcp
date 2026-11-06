@@ -18,6 +18,10 @@
 - `list_media` and `random_pick` with a `collection` and no `kind` list the
   kind the collection holds. An episode collection in a TV library used to
   return `total: 0` unless you passed `kind: "episode"`.
+- `list_media` and `random_pick` refuse a smart collection with no tag, with
+  an error naming its ratingKey and `get_children`. They used to answer
+  `No collection`, or list a different collection whose tag contained the
+  title.
 - `plex-mcp login --write` refuses a value that starts with `-`. It prints
   its usage line and exits 2, as it already did when nothing followed it.
   It used to take the value as the file name, so `login --write --foo`

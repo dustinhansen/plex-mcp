@@ -27,7 +27,7 @@ export const FILTER_SCHEMA = {
   decade: z.string().optional().describe("e.g. '1970s'"),
   contentRating: z.string().optional().describe("e.g. 'PG-13'"),
   collection: nonBlank("collection").optional()
-    .describe("filter to members of a collection. Leaving kind out uses the kind of item the collection holds"),
+    .describe("filter to members of a collection. Leaving kind out uses the kind of item the collection holds. A smart collection with no tag is an error naming the ratingKey to pass to get_children"),
   country: nonBlank("country").optional(),
   studio: nonBlank("studio").optional(),
   label: nonBlank("label").optional().describe("filter to items carrying this Plex label. Plex lists every label on the server under every library, so a label used only in another library returns no items rather than an error"),

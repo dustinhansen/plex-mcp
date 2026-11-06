@@ -90,9 +90,9 @@ server registers.
 | tool | what it does |
 |---|---|
 | `list_libraries` | All sections with `libraryType` (Movies / TV Shows / Music / Photos / Other Videos), scanner type, agent, and whether a scan is running. |
-| `list_media` | Any library, any kind (movie/show/season/episode/artist/album/track/collection). Filters: watched, rated, genre, year, decade, contentRating, collection, country, studio, maxDurationMin, addedSince, lastViewedBefore, lastViewedAfter. The last-viewed filters take an ISO date or a relative value like `-3y`. A never-watched item counts as last viewed before any date, so pair `lastViewedBefore` with `watched: "watched"` to leave those out. Sorts: title, year, rating, audienceRating, userRating, addedAt, lastViewedAt, viewCount, duration, random. A `filters` object names what each `genre`, `collection`, `country` or `studio` filter matched, so you can see when a name matched a longer one. Paginated (`offset`/`limit`/`nextOffset`). `fields` projects each record to the keys you need. `detail: true` adds fields such as cast, crew and a summary to each record, and caps `limit` at 25. |
+| `list_media` | Any library, any kind (movie/show/season/episode/artist/album/track/collection). Filters: watched, rated, genre, year, decade, contentRating, collection, country, studio, label, maxDurationMin, addedSince, lastViewedBefore, lastViewedAfter. The last-viewed filters take an ISO date or a relative value like `-3y`. A never-watched item counts as last viewed before any date, so pair `lastViewedBefore` with `watched: "watched"` to leave those out. Sorts: title, year, rating, audienceRating, userRating, addedAt, lastViewedAt, viewCount, duration, random. A `filters` object names what each `genre`, `collection`, `country`, `studio` or `label` filter matched, so you can see when a name matched a longer one. Paginated (`offset`/`limit`/`nextOffset`). `fields` projects each record to the keys you need. `detail: true` adds fields such as cast, crew and a summary to each record, and caps `limit` at 25. |
 | `search` | Global search across libraries incl. people, collections, playlists. `externalId` (`imdb:tt0113277`, `tmdb:949`, `tvdb:12345`) looks a movie or show up by the id Plex holds for it instead. |
-| `get_item` | Full metadata + file info (paths, codecs, sizes, every version) by ratingKey. |
+| `get_item` | Full metadata + file info (paths, codecs, sizes, every version) by ratingKey. `labels` names the item's Plex labels, and is an empty array when it has none. |
 | `get_children` | Children of a show (seasons), season (episodes), artist (albums), album (tracks), collection (items) or playlist (items, with `playlist: true`). Paginated (`offset`/`limit`/`nextOffset`). `fields` projects each record to the keys you need. `detail: true` adds fields such as cast, crew and a summary to each record, and caps `limit` at 25. |
 | `get_extras` | Trailers, featurettes, behind-the-scenes for an item. |
 | `person_credits` | Filmography by director/actor/writer/composer, with watched filter. Paginated (`offset`/`limit`/`nextOffset`). `fields` projects each record to the keys you need. `detail: true` adds fields such as cast, crew and a summary to each record, and caps `limit` at 25. |
@@ -339,8 +339,8 @@ npm run smoke     # build, then live checks against a real server (needs PLEX_UR
 
 The smoke suite checks every `list_media` filter against a live server:
 watched, rated, year, decade, genre, content rating, collection, country,
-studio, duration, added-since, last-viewed-before and last-viewed-after. It
-checks a Home user's view too, when there is one. Each filter check needs a
+studio, label, duration, added-since, last-viewed-before and last-viewed-after.
+It checks a Home user's view too, when there is one. Each filter check needs a
 match, except unwatched and unrated. Unwatched plus watched must equal the
 whole library, and so must unrated plus rated. When the server has nothing to
 test a filter with, the check logs a skip line naming the filter.
@@ -603,11 +603,15 @@ normally. The image's own `HEALTHCHECK` runs `node -e` with `fetch` instead.
 ### Plex quirks
 
 Paging works because the code sends container paging as HTTP headers (Plex
-silently ignores the query parameters). Person, genre, collection and country
-filters take names, and the code resolves them to Plex tag IDs. Studio is
+silently ignores the query parameters). Person, genre, collection, country and
+label filters take names, and the code resolves them to Plex tag IDs. Studio is
 matched by name instead (Plex lists a studio's ID as its name URL-encoded
 twice, and the filter never matches that). An unknown library or user gets an
 error that lists the valid ones.
+
+If you filter on a `label` used only in another library, you get no items (Plex
+lists every label on the server under every library). A `label` that no library
+has gets the same error as an unknown genre.
 
 A per-user view switches to that user's own token where Plex allows it (Home
 users), because `viewCount` reflects the requesting account. Plex doesn't allow

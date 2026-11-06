@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `get_item` returns a `labels` array naming the item's Plex labels. It's
+  empty when the item has none.
+- `list_media` and `random_pick` take a `label` filter, which works with
+  `kind: "episode"` as well as a library's default kind. It resolves a name
+  the way `genre` does and shows up in `filters`. A label that no library has
+  is an error. One used only in another library returns no items, because Plex
+  lists every label under every library.
 - `list_media` and `random_pick` return a `filters` object naming what
   each `genre`, `collection`, `country` or `studio` filter matched. A name
   that matches nothing exactly (ignoring case) falls back to the first one

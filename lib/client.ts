@@ -77,6 +77,7 @@ function metadataFromJson(value: unknown): PlexMetadata | undefined {
     Role: tagsFromJson(value.Role),
     Country: tagsFromJson(value.Country),
     Collection: tagsFromJson(value.Collection),
+    Label: tagsFromJson(value.Label),
     Guid: guidsFromJson(value.Guid),
     Media: mediaFromJson(value.Media),
     User: isRecord(value.User) ? {

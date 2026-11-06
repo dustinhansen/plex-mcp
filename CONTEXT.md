@@ -215,6 +215,12 @@ A named grouping of items within a single library, which Plex surfaces as a
 browsable entry in that library. Deleting one removes the grouping only.
 _Avoid_: set, group
 
+**Label**:
+A name attached to an item in Plex, which a library can be filtered on. Unlike
+a collection, it isn't a browsable entry. Plex lists every label on the server
+under every library, so a library can list a label that nothing in it carries.
+_Avoid_: tag (as a name for labels alone, because Plex calls genres and countries tags too)
+
 **Watchlist**:
 The server owner's "I want to watch this" list, kept on plex.tv rather than on
 the server, so it spans every server the account uses. Its movies and shows

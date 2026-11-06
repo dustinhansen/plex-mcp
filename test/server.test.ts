@@ -43,7 +43,7 @@ const BASE_TOOLS = [
 const schema = (properties: string[], required: string[] = [], defaults: Record<string, unknown> = {}) => ({ properties, required, defaults });
 const SCHEMA_CONTRACT: Record<string, ReturnType<typeof schema>> = {
   list_libraries: schema([]),
-  list_media: schema(["library", "kind", "watched", "rated", "genre", "year", "decade", "contentRating", "collection", "country", "studio", "maxDurationMin", "addedSince", "lastViewedBefore", "lastViewedAfter", "sort", "order", "user", "offset", "limit", "detail", "fields"], [], { library: "Movies", watched: "all", rated: "all", sort: "addedAt", order: "desc", offset: 0, limit: 100, detail: false }),
+  list_media: schema(["library", "kind", "watched", "rated", "genre", "year", "decade", "contentRating", "collection", "country", "studio", "label", "maxDurationMin", "addedSince", "lastViewedBefore", "lastViewedAfter", "sort", "order", "user", "offset", "limit", "detail", "fields"], [], { library: "Movies", watched: "all", rated: "all", sort: "addedAt", order: "desc", offset: 0, limit: 100, detail: false }),
   library_changes: schema(["library", "since", "kind", "limit", "detail"], [], { library: "Movies", since: "-7d", limit: 100, detail: false }),
   search: schema(["query", "externalId", "limit"], [], { limit: 20 }),
   get_item: schema(["ratingKey"], ["ratingKey"]), get_extras: schema(["ratingKey"], ["ratingKey"]),
@@ -51,7 +51,7 @@ const SCHEMA_CONTRACT: Record<string, ReturnType<typeof schema>> = {
   person_credits: schema(["name", "role", "library", "watched", "sort", "order", "offset", "limit", "detail", "fields"], ["name"], { role: "director", library: "Movies", watched: "all", sort: "year", order: "asc", offset: 0, limit: 100, detail: false }),
   library_stats: schema(["library", "includeUserStats", "user"], [], { library: "Movies", includeUserStats: false }),
   similar_items: schema(["ratingKey", "watched", "limit"], ["ratingKey"], { watched: "all", limit: 10 }),
-  random_pick: schema(["library", "kind", "watched", "rated", "genre", "year", "decade", "contentRating", "collection", "country", "studio", "maxDurationMin", "addedSince", "lastViewedBefore", "lastViewedAfter", "count", "detail", "user"], [], { library: "Movies", watched: "all", rated: "all", count: 3, detail: false }),
+  random_pick: schema(["library", "kind", "watched", "rated", "genre", "year", "decade", "contentRating", "collection", "country", "studio", "label", "maxDurationMin", "addedSince", "lastViewedBefore", "lastViewedAfter", "count", "detail", "user"], [], { library: "Movies", watched: "all", rated: "all", count: 3, detail: false }),
   get_watchlist: schema(["offset", "limit"], [], { offset: 0, limit: 50 }),
   continue_watching: schema(["library", "user", "limit", "detail"], [], { limit: 20, detail: false }),
   watch_history: schema(["user", "library", "kind", "since", "until", "ratingKey", "offset", "limit"], [], { offset: 0, limit: 50 }),

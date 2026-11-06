@@ -49,6 +49,7 @@ export type PlexMetadata = {
   Role?: PlexTag[];
   Country?: PlexTag[];
   Collection?: PlexTag[];
+  Label?: PlexTag[];
   /** External ids (imdb://, tmdb://, tvdb://). Plex sends them only with includeGuids=1. */
   Guid?: Array<{ id: string }>;
   Media?: PlexMedia[];

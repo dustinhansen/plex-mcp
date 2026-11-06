@@ -119,6 +119,15 @@ test("plex: empty body (writes) → {}", async () => {
   assert.deepEqual(await c.plex("/:/scrobble", { key: "1" }), {});
 });
 
+test("plex: a collection keeps its smart flag, and a regular one has none", async () => {
+  const f = stubFetch({ "/library/sections/1/collections": { Metadata: [
+    { type: "collection", title: "Smart", ratingKey: "1", smart: "1", subtype: "movie", childCount: 2 },
+    { type: "collection", title: "Regular", ratingKey: "2", subtype: "movie", childCount: 3 },
+  ] } });
+  const { Metadata } = await makeClient({ ...BASE, fetchImpl: f }).plex("/library/sections/1/collections");
+  assert.deepEqual(Metadata?.map((item) => item.smart), ["1", undefined]);
+});
+
 test("plexAll pages until short page", async () => {
   const f = stubFetch({
     "/big": (u: URL, opts: StubInit) => {

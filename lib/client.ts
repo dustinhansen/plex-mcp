@@ -66,6 +66,7 @@ function metadataFromJson(value: unknown): PlexMetadata | undefined {
     duration: numberOrUndefined(value.duration),
     playlistType: stringOrUndefined(value.playlistType),
     subtype: stringOrUndefined(value.subtype),
+    smart: stringOrUndefined(value.smart),
     studio: stringOrUndefined(value.studio),
     summary: stringOrUndefined(value.summary),
     accountID: numberOrUndefined(value.accountID),

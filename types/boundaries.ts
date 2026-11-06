@@ -37,6 +37,8 @@ export type PlexMetadata = {
   duration?: number;
   playlistType?: string;
   subtype?: string;
+  /** "1" on a smart collection. Plex leaves it off a regular one. */
+  smart?: string;
   studio?: string;
   summary?: string;
   accountID?: number;

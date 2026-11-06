@@ -345,6 +345,12 @@ match, except unwatched and unrated. Unwatched plus watched must equal the
 whole library, and so must unrated plus rated. When the server has nothing to
 test a filter with, the check logs a skip line naming the filter.
 
+It also checks `get_children` on 1 regular, 1 episode and 1 smart collection,
+because Plex has 2 paths to a collection's members and neither one always
+answers. Each total must equal the collection's own `childCount`. If the server
+has no collection with members for one of those, the check logs a skip line
+naming it.
+
 plex-mcp is developed with AI coding assistants (mostly Claude Code). Every
 change lands through a pull request, and every job in [CI](#ci-and-releases) is
 a required check on `main`. That covers the type checks, the offline

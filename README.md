@@ -93,7 +93,7 @@ server registers.
 | `list_media` | Any library, any kind (movie/show/season/episode/artist/album/track/collection). Filters: watched, rated, genre, year, decade, contentRating, collection, country, studio, label, maxDurationMin, addedSince, lastViewedBefore, lastViewedAfter. The last-viewed filters take an ISO date or a relative value like `-3y`. A never-watched item counts as last viewed before any date, so pair `lastViewedBefore` with `watched: "watched"` to leave those out. Sorts: title, year, rating, audienceRating, userRating, addedAt, lastViewedAt, viewCount, duration, random. A `filters` object names what each `genre`, `collection`, `country`, `studio` or `label` filter matched, so you can see when a name matched a longer one. `collection` with no `kind` lists the kind the collection holds, so an episode collection in a TV library lists episodes. A smart collection with no tag is an error naming the ratingKey to pass to `get_children`. Paginated (`offset`/`limit`/`nextOffset`). `fields` projects each record to the keys you need. `detail: true` adds fields such as cast, crew and a summary to each record, and caps `limit` at 25. |
 | `search` | Global search across libraries incl. people, collections, playlists. `externalId` (`imdb:tt0113277`, `tmdb:949`, `tvdb:12345`) looks a movie or show up by the id Plex holds for it instead. |
 | `get_item` | Full metadata + file info (paths, codecs, sizes, every version) by ratingKey. `labels` names the item's Plex labels, and is an empty array when it has none. |
-| `get_children` | Children of a show (seasons), season (episodes), artist (albums), album (tracks), collection (items) or playlist (items, with `playlist: true`). Paginated (`offset`/`limit`/`nextOffset`). `fields` projects each record to the keys you need. `detail: true` adds fields such as cast, crew and a summary to each record, and caps `limit` at 25. |
+| `get_children` | Children of a show (seasons), season (episodes), artist (albums), album (tracks), collection (items) or playlist (items, with `playlist: true`). A movie, episode or track has no children, and the call fails saying so. Paginated (`offset`/`limit`/`nextOffset`). `fields` projects each record to the keys you need. `detail: true` adds fields such as cast, crew and a summary to each record, and caps `limit` at 25. |
 | `get_extras` | Trailers, featurettes, behind-the-scenes for an item. |
 | `person_credits` | Filmography by director/actor/writer/composer, with watched filter. Paginated (`offset`/`limit`/`nextOffset`). `fields` projects each record to the keys you need. `detail: true` adds fields such as cast, crew and a summary to each record, and caps `limit` at 25. |
 | `library_changes` | What's new or updated since a cutoff (`-7d` or ISO date), as an `added` and an `updated` list, each capped by `limit`. `detail: true` adds fields such as cast, crew and a summary to each record, and caps `limit` at 25 for each list. |
@@ -632,6 +632,12 @@ answers 404 for shows, seasons, artists and albums. We also rejected looking up
 the item's kind first, because that adds a request to every call and still needs
 the fallback. A `collection` parameter is out too, because anyone who left it off
 would get a silent 0.
+
+Plex answers the metadata path with a 400 for a movie, an episode or a track. So
+the code reads a 400 there as an item with no children and says so, which tells
+you to stop rather than retry. An unknown ratingKey and a playlist's ratingKey
+without `playlist: true` get a 404 instead. We leave that as Plex's 404, because
+"no children" would be wrong for both.
 
 A `collection` filter with no `kind` lists the kind the collection holds (the
 collection's `subtype` in Plex). A TV library's collection can hold episodes, and

@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { listParams, SORT_KEYS, KIND_TYPE, hasDefaultKind, isTypedKind, sectionKind, sinceValue } from "./filters.js";
 import { tags, itemDict, extraDict, iso, isWatched, sectionDict, libraryType, hasPersonalMediaAgent, playUser, project } from "./format.js";
-import { isNotFound } from "./upstream.js";
+import { isBadRequest, isNotFound } from "./upstream.js";
 import { defineTool, PLEX_ID, READ_ONLY } from "../types/tool-registration.js";
 import type { PlexClient, PlexMediaContainer, PlexMetadata, PlexSection, Query } from "../types/boundaries.js";
 
@@ -110,9 +110,15 @@ const page = (container: PlexMediaContainer, offset: number, detail: boolean, fi
  *  and for most smart collections, which list only on the collections path. A
  *  smart collection whose saved query names another server lists only on the
  *  metadata path, so neither path serves every collection. Anything that isn't
- *  a collection is a 404 on the collections path, and its empty answer stands. */
+ *  a collection is a 404 on the collections path, and its empty answer stands.
+ *  Plex answers the metadata path with a 400 for a movie, an episode or a track,
+ *  so that status gets an error saying what it means. */
 async function childrenOf(client: PlexClient, ratingKey: string, paging: { start: number; size: number }): Promise<PlexMediaContainer> {
-  const children = await client.plex(`/library/metadata/${ratingKey}/children`, {}, paging);
+  const children = await client.plex(`/library/metadata/${ratingKey}/children`, {}, paging).catch((error: unknown) => {
+    throw isBadRequest(error)
+      ? new Error(`Item ${ratingKey} has no children. Only a show, season, artist, album or collection has children.`)
+      : error;
+  });
   if (containerTotal(children)) return children;
   return client.plex(`/library/collections/${ratingKey}/children`, {}, paging).catch((error: unknown) => {
     if (isNotFound(error)) return children;

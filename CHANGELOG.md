@@ -28,6 +28,9 @@
   appended your token to a file called `--foo`.
 - `get_children` lists the members of an episode collection and of a smart
   collection. It used to return `total: 0` for most of them.
+- `get_children` on a movie, an episode or a track fails with an error saying
+  the item has no children and naming the kinds that do. It used to fail with
+  `Plex 400 on /library/metadata/<ratingKey>/children`.
 
 ## 0.9.1 — 2026-11-02
 

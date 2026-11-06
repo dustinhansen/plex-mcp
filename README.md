@@ -613,6 +613,20 @@ If you filter on a `label` used only in another library, you get no items (Plex
 lists every label on the server under every library). A `label` that no library
 has gets the same error as an unknown genre.
 
+`get_children` can take 2 requests, because Plex has 2 paths to a collection's
+members and neither one always answers. The metadata path
+(`/library/metadata/<ratingKey>/children`) returns nothing for an episode
+collection and for most smart collections. The collections path
+(`/library/collections/<ratingKey>/children`) returns nothing for a smart
+collection whose saved query names a different server. So the code reads the
+metadata path first and tries the collections path only when that comes back
+empty, which means an empty show or album takes 2 requests as well. We rejected
+reading the collections path alone because it misses those smart collections and
+answers 404 for shows, seasons, artists and albums. We also rejected looking up
+the item's kind first, because that adds a request to every call and still needs
+the fallback. A `collection` parameter is out too, because anyone who left it off
+would get a silent 0.
+
 A per-user view switches to that user's own token where Plex allows it (Home
 users), because `viewCount` reflects the requesting account. Plex doesn't allow
 it for friends. For them, `watch_history` is the view that works, and

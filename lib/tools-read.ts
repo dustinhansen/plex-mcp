@@ -81,12 +81,29 @@ export const DETAIL_FIELDS_PHRASE = "fields such as directors, actors, collectio
 /** How a tool whose detail=true caps its page and adds fields describes both. */
 const DETAIL_FIELDS_CLAUSE = `${DETAIL_CAP_CLAUSE} and adds ${DETAIL_FIELDS_PHRASE}.`;
 
+const containerTotal = (container: PlexMediaContainer) =>
+  container.totalSize ?? container.size ?? container.Metadata?.length ?? 0;
+
 const page = (container: PlexMediaContainer, offset: number, detail: boolean, fields?: string[]) => {
   const items = (container.Metadata ?? []).map((item) => project(itemDict(item, detail), fields));
-  const total = container.totalSize ?? container.size ?? items.length;
+  const total = containerTotal(container);
   const next = offset + items.length;
   return { total, offset, returned: items.length, nextOffset: next < total ? next : null, items };
 };
+
+/** Plex answers the metadata path with an empty 200 for an episode collection
+ *  and for most smart collections, which list only on the collections path. A
+ *  smart collection whose saved query names another server lists only on the
+ *  metadata path, so neither path serves every collection. Anything that isn't
+ *  a collection is a 404 on the collections path, and its empty answer stands. */
+async function childrenOf(client: PlexClient, ratingKey: string, paging: { start: number; size: number }): Promise<PlexMediaContainer> {
+  const children = await client.plex(`/library/metadata/${ratingKey}/children`, {}, paging);
+  if (containerTotal(children)) return children;
+  return client.plex(`/library/collections/${ratingKey}/children`, {}, paging).catch((error: unknown) => {
+    if (isNotFound(error)) return children;
+    throw error;
+  });
+}
 
 /** The full metadata of every item Plex has among `keys`, in one request.
  *  Plex omits keys it no longer has, and answers 404 when it has none of them.
@@ -240,7 +257,7 @@ export function readTools(root: PlexClient) {
             { type: KIND_TYPE[kind], ...params, sort }, { start: 0, size: limit });
           const container = args.detail ? await withCollections(root, listing) : listing;
           const items = (container.Metadata ?? []).map((item) => ({ ...itemDict(item, args.detail), updatedAt: iso(item.updatedAt) }));
-          return { total: container.totalSize ?? container.size ?? items.length, returned: items.length, items };
+          return { total: containerTotal(container), returned: items.length, items };
         };
         return {
           library: section.title,
@@ -364,10 +381,10 @@ export function readTools(root: PlexClient) {
         ...pageSchema,
       },
       handler: async (args) => {
-        const path = args.playlist
-          ? `/playlists/${args.ratingKey}/items`
-          : `/library/metadata/${args.ratingKey}/children`;
-        const container = await root.plex(path, {}, { start: args.offset, size: effLimit(args.limit, args.detail) });
+        const paging = { start: args.offset, size: effLimit(args.limit, args.detail) };
+        const container = args.playlist
+          ? await root.plex(`/playlists/${args.ratingKey}/items`, {}, paging)
+          : await childrenOf(root, args.ratingKey, paging);
         return page(args.detail ? await withCollections(root, container) : container, args.offset, args.detail, args.fields);
       },
     }),

@@ -710,3 +710,93 @@ test("manage_watchlist: a plex.tv failure partway names the keys already changed
   await assert.rejects(async () => writeTools(client).manage_watchlist.handler({ action: "add", ratingKeys: ["10", "20"] }),
     (e: Error) => e.message === "plex.tv 404 on /actions/addToWatchlist. Already added: 10.");
 });
+
+/** A library whose collections hold the given kinds. Its listing filters on
+ *  `type` and `collection` the way Plex does, so the wrong kind lists nothing. */
+function collectionLibrary(collections: { key: string; title: string; subtype?: string }[], members: Record<string, { type: string; plexType: string }[]>) {
+  return plexServer({
+    "/library/sections": SECTIONS,
+    "/library/sections/2/collection": { Directory: collections.map((c) => ({ key: c.key, title: c.title })) },
+    "/library/sections/2/collections": { Metadata: collections.filter((c) => c.subtype !== undefined).map((c) => ({ ratingKey: `9${c.key}`, type: "collection", title: c.title, subtype: c.subtype })) },
+    "/library/sections/2/all": (u: URL) => {
+      const hits = (members[u.searchParams.get("collection") ?? ""] ?? []).filter((m) => m.plexType === u.searchParams.get("type"));
+      return { totalSize: hits.length, Metadata: hits.map((m, i) => ({ ratingKey: String(100 + i), type: m.type, title: `${m.type} ${i}` })) };
+    },
+  });
+}
+const listingType = (calls: Call[]) => calls.find((c) => c.path.endsWith("/all"))?.query.type;
+const readCollections = (calls: Call[]) => calls.some((c) => c.path.endsWith("/collections"));
+const EPISODES = [{ type: "episode", plexType: "4" }, { type: "episode", plexType: "4" }];
+const SHOWS = [{ type: "show", plexType: "2" }];
+
+test("list_media by collection with no kind lists an episode collection's episodes", async () => {
+  const { client } = collectionLibrary([{ key: "5", title: "Halloween Episodes", subtype: "episode" }], { 5: EPISODES });
+  const out = await callTool(client, "list_media", { library: "TV Shows", collection: "Halloween Episodes" });
+  const body = JSON.parse(out.text);
+  assert.equal(body.total, 2);
+  assert.deepEqual(body.items.map((i: { kind: string }) => i.kind), ["episode", "episode"]);
+});
+
+test("random_pick by collection with no kind picks from an episode collection", async () => {
+  const { client } = collectionLibrary([{ key: "5", title: "Halloween Episodes", subtype: "episode" }], { 5: EPISODES });
+  const out = await callTool(client, "random_pick", { library: "TV Shows", collection: "Halloween Episodes" });
+  assert.equal(JSON.parse(out.text).picks.length, 2);
+});
+
+test("list_media by collection with no kind lists whatever kind the collection holds", async () => {
+  for (const [subtype, type, plexType] of [["show", "show", "2"], ["movie", "movie", "1"], ["album", "album", "9"]] as const) {
+    const { client, calls } = collectionLibrary([{ key: "5", title: "Pair", subtype }], { 5: [{ type, plexType }] });
+    const body = JSON.parse((await callTool(client, "list_media", { library: "TV Shows", collection: "Pair" })).text);
+    assert.equal(body.total, 1, subtype);
+    assert.equal(listingType(calls), plexType, subtype);
+  }
+});
+
+test("list_media sends an explicit kind as given and doesn't read the collections listing for it", async () => {
+  const { client, calls } = collectionLibrary([{ key: "5", title: "Halloween Episodes", subtype: "episode" }], { 5: EPISODES });
+  const body = JSON.parse((await callTool(client, "list_media", { library: "TV Shows", kind: "show", collection: "Halloween Episodes" })).text);
+  assert.equal(body.total, 0);
+  assert.equal(listingType(calls), "2");
+  assert.ok(!readCollections(calls));
+});
+
+test("list_media with no collection doesn't read the collections listing", async () => {
+  const { client, calls } = collectionLibrary([{ key: "5", title: "Halloween Episodes", subtype: "episode" }], {});
+  await callTool(client, "list_media", { library: "TV Shows" });
+  assert.equal(listingType(calls), "2");
+  assert.ok(!readCollections(calls));
+});
+
+test("list_media falls back to the library's kind when the collection's subtype names no kind this tool has", async () => {
+  const { client, calls } = collectionLibrary([{ key: "5", title: "Pair", subtype: "photo" }], { 5: SHOWS });
+  assert.equal(JSON.parse((await callTool(client, "list_media", { library: "TV Shows", collection: "Pair" })).text).total, 1);
+  assert.equal(listingType(calls), "2");
+});
+
+test("list_media falls back to the library's kind for a tag no collection carries, or a subtype that only names an Object property", async () => {
+  for (const collections of [[{ key: "5", title: "Pair" }], [{ key: "5", title: "Pair", subtype: "__proto__" }]]) {
+    const { client, calls } = collectionLibrary(collections, { 5: SHOWS });
+    const body = JSON.parse((await callTool(client, "list_media", { library: "TV Shows", collection: "Pair" })).text);
+    assert.equal(body.total, 1);
+    assert.equal(listingType(calls), "2");
+  }
+});
+
+test("list_media reads the kind of the collection a partial name resolved to", async () => {
+  const { client } = collectionLibrary([{ key: "4", title: "Quick Watches", subtype: "show" }, { key: "5", title: "Halloween Episodes", subtype: "episode" }], { 5: EPISODES });
+  const body = JSON.parse((await callTool(client, "list_media", { library: "TV Shows", collection: "halloween" })).text);
+  assert.equal(body.filters.collection, "Halloween Episodes");
+  assert.equal(body.total, 2);
+});
+
+test("random_pick sends an explicit kind as given, and reads the collections listing only for a collection with no kind", async () => {
+  const collections = [{ key: "5", title: "Halloween Episodes", subtype: "episode" }];
+  const explicit = collectionLibrary(collections, { 5: EPISODES });
+  await callTool(explicit.client, "random_pick", { library: "TV Shows", kind: "show", collection: "Halloween Episodes" });
+  assert.equal(listingType(explicit.calls), "2");
+  assert.ok(!readCollections(explicit.calls));
+  const uncollected = collectionLibrary(collections, {});
+  await callTool(uncollected.client, "random_pick", { library: "TV Shows" });
+  assert.equal(listingType(uncollected.calls), "2");
+  assert.ok(!readCollections(uncollected.calls));
+});

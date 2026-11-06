@@ -1,8 +1,8 @@
 /** Recommendation helpers built on the read tools. */
 import { z } from "zod";
-import { listParams, sectionKind } from "./filters.js";
+import { listParams } from "./filters.js";
 import { itemDict, isWatched, iso, mins } from "./format.js";
-import { DETAIL_CAP_CLAUSE, DETAIL_FIELDS_PHRASE, effLimit, FILTER_SCHEMA, FILTERS_RESULT_CLAUSE, HOME_USER_SCHEMA, resolveFilterTags, withCollections } from "./tools-read.js";
+import { DETAIL_CAP_CLAUSE, defaultKind, DETAIL_FIELDS_PHRASE, effLimit, FILTER_SCHEMA, FILTERS_RESULT_CLAUSE, HOME_USER_SCHEMA, resolveFilterTags, withCollections } from "./tools-read.js";
 import { defineTool, PLEX_ID, READ_ONLY } from "../types/tool-registration.js";
 import type { PlexClient, PlexMetadata } from "../types/boundaries.js";
 
@@ -49,7 +49,8 @@ export function discoverTools(root: PlexClient) {
         "N random items matching the same filters as list_media (the 'just pick " +
         "something' tool). Defaults to 3 picks. Combine watched=unwatched with genre, " +
         "decade, maxDurationMin etc. user picks as a Plex Home user, so unwatched " +
-        "means unwatched by them. Each pick is the record list_media returns " +
+        "means unwatched by them. collection with no kind picks the kind the " +
+        "collection holds. Each pick is the record list_media returns " +
         "(title, year, watched state, genres, duration and so on). detail=true " +
         `adds ${DETAIL_FIELDS_PHRASE} so you can explain the pick. ${FILTERS_RESULT_CLAUSE}`,
       inputSchema: {
@@ -61,8 +62,8 @@ export function discoverTools(root: PlexClient) {
       handler: async (args) => {
         const client = await root.as(args.user);
         const section = await client.sectionByTitle(args.library);
-        const kind = args.kind ?? sectionKind(section.type);
         const { tagIds, filters } = await resolveFilterTags(client, section.key, args);
+        const kind = args.kind ?? await defaultKind(client, section, filters?.collection);
         const params = listParams({ ...args, kind, sort: "random" }, tagIds);
         const listing = await client.plex(`/library/sections/${section.key}/all`, params, { start: 0, size: args.count });
         const container = args.detail ? await withCollections(client, listing) : listing;

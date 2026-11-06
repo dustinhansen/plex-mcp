@@ -343,6 +343,49 @@ test("get_children: a collections path failure other than 404 is reported, not r
   await assert.rejects(async () => readTools(client).get_children.handler({ ...CHILDREN_ARGS, ratingKey: "30" }), /500/);
 });
 
+/** A client whose every request gets `status`, with a body that must never reach an error. */
+function failingPlex(status: number) {
+  const paths: string[] = [];
+  const fetchImpl = async (url: URL) => {
+    paths.push(new URL(url).pathname);
+    return { ok: false, status, text: async () => "BODY FROM PLEX" };
+  };
+  return { paths, client: makeClient({ baseUrl: "http://plex.test:32400", token: "tok", fetchImpl, plextv: makePlexTv({ fetchImpl }) }) };
+}
+
+test("get_children: a 400 on the metadata path says the item has no children, after 1 request", async () => {
+  const { client, paths } = failingPlex(400);
+  const { isError, text } = await callTool(client, "get_children", { ratingKey: "30" });
+  assert.equal(isError, true);
+  assert.match(text, /Item 30 has no children\. Only a show, season, artist, album or collection has children\./);
+  assert.doesNotMatch(text, /BODY FROM PLEX|Plex 400/);
+  assert.deepEqual(paths, ["/library/metadata/30/children"]);
+});
+
+test("get_children: a 404 and a 500 on the metadata path report as themselves", async () => {
+  for (const status of [404, 500]) {
+    const { client, paths } = failingPlex(status);
+    const { isError, text } = await callTool(client, "get_children", { ratingKey: "30" });
+    assert.equal(isError, true);
+    assert.match(text, new RegExp(`Plex ${status} on /library/metadata/30/children`));
+    assert.doesNotMatch(text, /has no children|BODY FROM PLEX/);
+    assert.deepEqual(paths, ["/library/metadata/30/children"]);
+  }
+});
+
+test("get_children: a 400 on the collections path is not read as an item with no children", async () => {
+  const fetchImpl = async (url: URL) => new URL(url).pathname.startsWith("/library/collections/")
+    ? { ok: false, status: 400, text: async () => "" }
+    : { ok: true, status: 200, text: async () => JSON.stringify({ MediaContainer: NO_CHILDREN }) };
+  const client = makeClient({ baseUrl: "http://plex.test:32400", token: "tok", fetchImpl, plextv: makePlexTv({ fetchImpl }) });
+  await assert.rejects(async () => readTools(client).get_children.handler({ ...CHILDREN_ARGS, ratingKey: "30" }), /Plex 400 on \/library\/collections\/30\/children/);
+});
+
+test("get_children: a 400 on a playlist's items is not read as an item with no children", async () => {
+  const { client } = failingPlex(400);
+  await assert.rejects(async () => readTools(client).get_children.handler({ ...CHILDREN_ARGS, ratingKey: "90", playlist: true }), /Plex 400 on \/playlists\/90\/items/);
+});
+
 test("person_credits: resolves the director through the search hub, then filters the section", async () => {
   const { client, calls } = plexServer({
     "/library/sections": SECTIONS,

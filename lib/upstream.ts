@@ -48,6 +48,9 @@ function failure(error: unknown, upstream: Upstream, operation: string): Upstrea
 /** True for a 404 from any upstream, read from the status, not the message. */
 export const isNotFound = (error: unknown): boolean => error instanceof UpstreamError && error.status === 404;
 
+/** True for a 400 from any upstream, read from the status, not the message. */
+export const isBadRequest = (error: unknown): boolean => error instanceof UpstreamError && error.status === 400;
+
 /** One request with a 30-second timeout and no retry. Resolves only on a 2xx,
  *  with the body text. The timeout covers reading the body too. */
 export async function upstreamText(fetchImpl: FetchLike, upstream: Upstream, operation: string, url: URL, init: RequestInit = {}): Promise<string> {

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 — 2026-11-06
 
 - `get_item` returns a `labels` array naming the item's Plex labels. It's
   empty when the item has none.

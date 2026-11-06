@@ -5,8 +5,8 @@ published by hand. `.github/workflows/release.yml` reacts to it. It stages the
 npm package and publishes the multi-arch image, then publishes the MCP registry
 entry once I've approved the npm version. Nothing publishes from `main`.
 
-Versions here are written as `<version>` (for example `0.10.0`, or
-`0.10.0-rc.1` for a release candidate) and tags as `v<version>`. Once the bump
+Versions here are written as `<version>` (for example `0.11.0`, or
+`0.11.0-rc.1` for a release candidate) and tags as `v<version>`. Once the bump
 has merged, read the version from `package.json` on `main` rather than typing
 it:
 
@@ -16,6 +16,23 @@ VERSION=$(node -p "require('./package.json').version")
 ```
 
 The commands below assume `VERSION` is set this way.
+
+## Choosing the version
+
+A release carrying a feature takes a minor bump rather than a patch, because
+the version is how you can tell there's something new to use. A feature here is
+new surface a client can see, such as a tool, a parameter or a response field.
+An RC is only for a release whose publishing path is unproven, because an RC
+tests how a version reaches people, and CI and `npm run smoke` already test the
+code.
+
+0.10.0 is the example. It adds `labels` to `get_item`, a `label` filter, and a
+`filters` object on `list_media` and `random_pick`. I rejected 0.9.2 because
+those are features, so a patch breaks the rule. I rejected cutting an RC before
+it because the reason 0.9.1 needed one is gone. Staged publishing was unproven
+then, and I couldn't find anything from npm on whether provenance survives
+approval. `0.9.1-rc.1` showed that it does, and `release.yml` didn't change
+between that RC and 0.10.0.
 
 ## Every release
 

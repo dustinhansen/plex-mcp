@@ -1,6 +1,6 @@
 {
   "name": "@dustinhansen/plex-mcp",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "mcpName": "io.github.dustinhansen/plex-mcp",
   "description": "MCP server for Plex Media Server: full-library browsing with watched state, all-user watch history, recommendations, curation writes, plex.tv sign-in, and opt-in playback.",
   "type": "module",

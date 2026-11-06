@@ -156,8 +156,17 @@ await checkFilter("decade", year && `${decadeStart}s`, (movie) => movie.year >= 
 const contentRating = credited.find((movie) => movie.contentRating)?.contentRating;
 await checkFilter("contentRating", contentRating, (movie) => movie.contentRating === contentRating);
 // from the tags the filter resolves against: the newest movies are often in no
-// collection, and a smart collection tags none of its items
-const collection = (await client.plex(`/library/sections/${(await client.sectionByTitle(MOVIES)).key}/collection`)).Directory?.[0]?.title;
+// collection, and most smart collections have no tag
+const moviesKey = (await client.sectionByTitle(MOVIES)).key;
+const collectionTags = (await client.plex(`/library/sections/${moviesKey}/collection`)).Directory ?? [];
+const collection = collectionTags[0]?.title;
+// a smart collection with no tag names where to list it instead of reading as missing
+const taggedTitles = new Set(collectionTags.map((tag: Live) => tag.title.toLowerCase()));
+const untaggedSmart = ((await client.plex(`/library/sections/${moviesKey}/collections`)).Metadata ?? []).find((item: Live) => item.smart === "1" && !taggedTitles.has(item.title.toLowerCase()));
+if (untaggedSmart) {
+  await assert.rejects(tools.list_media.handler({ library: MOVIES, watched: "all", collection: untaggedSmart.title, sort: "title", order: "asc", ...pageArgs }), new RegExp(`get_children with ratingKey ${untaggedSmart.ratingKey}`));
+  console.log("ok  list_media refuses a smart collection with no tag");
+} else console.log("skip smart collection refusal (no untagged smart collection in the movie library)");
 await checkFilter("collection", collection, (movie) => movie.collections.includes(collection));
 if (collection) await run("list_media", { library: MOVIES, watched: "all", collection, sort: "title", order: "asc", ...pageArgs, detail: true }, async (out) => {
   for (const item of out.items) assert.deepEqual(item.collections, (await tools.get_item.handler({ ratingKey: item.ratingKey })).collections, `detail record ${item.ratingKey} names its collections`);

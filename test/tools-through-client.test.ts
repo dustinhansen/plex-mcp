@@ -800,3 +800,56 @@ test("random_pick sends an explicit kind as given, and reads the collections lis
   assert.equal(listingType(uncollected.calls), "2");
   assert.ok(!readCollections(uncollected.calls));
 });
+
+/** A library with tags and a collections listing that needn't agree, as Plex's
+ *  don't: most smart collections have no tag. */
+function smartLibrary(tags: { key: string; title: string }[], collections: Record<string, unknown>[]) {
+  return plexServer({
+    "/library/sections": SECTIONS,
+    "/library/sections/2/collection": { Directory: tags },
+    "/library/sections/2/collections": { Metadata: collections.map((c) => ({ type: "collection", ...c })) },
+    "/library/sections/2/all": { totalSize: 1, Metadata: [{ ratingKey: "100", type: "show", title: "Member" }] },
+  });
+}
+const SMART = { ratingKey: "77", title: "Recent Stand-Up", smart: "1", subtype: "show" };
+
+for (const tool of ["list_media", "random_pick"]) {
+  test(`${tool} refuses a smart collection with no tag, naming its ratingKey and get_children, and reads no listing`, async () => {
+    const { client, calls } = smartLibrary([], [SMART]);
+    const out = await callTool(client, tool, { library: "TV Shows", collection: "recent stand-up" });
+    assert.equal(out.isError, true);
+    assert.match(out.text, /"Recent Stand-Up" is a smart collection/);
+    assert.match(out.text, /get_children with ratingKey 77/);
+    assert.ok(!calls.some((c) => c.path.endsWith("/all")));
+  });
+}
+
+test("list_media refuses a smart collection instead of listing the longer tag that contains its title", async () => {
+  const { client, calls } = smartLibrary([{ key: "5", title: "Recent Stand-Up Specials" }], [SMART]);
+  const out = await callTool(client, "list_media", { library: "TV Shows", collection: "Recent Stand-Up" });
+  assert.equal(out.isError, true);
+  assert.match(out.text, /get_children with ratingKey 77/);
+  assert.ok(!calls.some((c) => c.path.endsWith("/all")));
+});
+
+test("list_media lists a smart collection that has an exact tag, and reads no collections listing", async () => {
+  const { client, calls } = smartLibrary([{ key: "5", title: "Recent Stand-Up" }], [SMART]);
+  const body = JSON.parse((await callTool(client, "list_media", { library: "TV Shows", kind: "show", collection: "recent stand-up" })).text);
+  assert.equal(body.filters.collection, "Recent Stand-Up");
+  assert.equal(body.total, 1);
+  assert.ok(!readCollections(calls));
+});
+
+test("list_media still takes the substring fallback when the title belongs to no smart collection", async () => {
+  const { client } = smartLibrary([{ key: "5", title: "Recent Stand-Up Specials" }], [SMART, { ratingKey: "78", title: "Stand-Up" }]);
+  const body = JSON.parse((await callTool(client, "list_media", { library: "TV Shows", collection: "Stand-Up" })).text);
+  assert.equal(body.filters.collection, "Recent Stand-Up Specials");
+  assert.equal(body.total, 1);
+});
+
+test("list_media still says no collection when no tag and no smart collection has the name", async () => {
+  const { client } = smartLibrary([{ key: "5", title: "Noir" }], [SMART]);
+  const out = await callTool(client, "list_media", { library: "TV Shows", collection: "Nope" });
+  assert.equal(out.isError, true);
+  assert.match(out.text, /No collection "Nope" in this library\. Near matches: Noir/);
+});

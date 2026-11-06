@@ -90,7 +90,7 @@ server registers.
 | tool | what it does |
 |---|---|
 | `list_libraries` | All sections with `libraryType` (Movies / TV Shows / Music / Photos / Other Videos), scanner type, agent, and whether a scan is running. |
-| `list_media` | Any library, any kind (movie/show/season/episode/artist/album/track/collection). Filters: watched, rated, genre, year, decade, contentRating, collection, country, studio, label, maxDurationMin, addedSince, lastViewedBefore, lastViewedAfter. The last-viewed filters take an ISO date or a relative value like `-3y`. A never-watched item counts as last viewed before any date, so pair `lastViewedBefore` with `watched: "watched"` to leave those out. Sorts: title, year, rating, audienceRating, userRating, addedAt, lastViewedAt, viewCount, duration, random. A `filters` object names what each `genre`, `collection`, `country`, `studio` or `label` filter matched, so you can see when a name matched a longer one. `collection` with no `kind` lists the kind the collection holds, so an episode collection in a TV library lists episodes. Paginated (`offset`/`limit`/`nextOffset`). `fields` projects each record to the keys you need. `detail: true` adds fields such as cast, crew and a summary to each record, and caps `limit` at 25. |
+| `list_media` | Any library, any kind (movie/show/season/episode/artist/album/track/collection). Filters: watched, rated, genre, year, decade, contentRating, collection, country, studio, label, maxDurationMin, addedSince, lastViewedBefore, lastViewedAfter. The last-viewed filters take an ISO date or a relative value like `-3y`. A never-watched item counts as last viewed before any date, so pair `lastViewedBefore` with `watched: "watched"` to leave those out. Sorts: title, year, rating, audienceRating, userRating, addedAt, lastViewedAt, viewCount, duration, random. A `filters` object names what each `genre`, `collection`, `country`, `studio` or `label` filter matched, so you can see when a name matched a longer one. `collection` with no `kind` lists the kind the collection holds, so an episode collection in a TV library lists episodes. A smart collection with no tag is an error naming the ratingKey to pass to `get_children`. Paginated (`offset`/`limit`/`nextOffset`). `fields` projects each record to the keys you need. `detail: true` adds fields such as cast, crew and a summary to each record, and caps `limit` at 25. |
 | `search` | Global search across libraries incl. people, collections, playlists. `externalId` (`imdb:tt0113277`, `tmdb:949`, `tvdb:12345`) looks a movie or show up by the id Plex holds for it instead. |
 | `get_item` | Full metadata + file info (paths, codecs, sizes, every version) by ratingKey. `labels` names the item's Plex labels, and is an empty array when it has none. |
 | `get_children` | Children of a show (seasons), season (episodes), artist (albums), album (tracks), collection (items) or playlist (items, with `playlist: true`). Paginated (`offset`/`limit`/`nextOffset`). `fields` projects each record to the keys you need. `detail: true` adds fields such as cast, crew and a summary to each record, and caps `limit` at 25. |
@@ -104,7 +104,7 @@ server registers.
 | tool | what it does |
 |---|---|
 | `similar_items` | Plex's "more like this" for an item, with a watched filter. |
-| `random_pick` | N random items matching any `list_media` filter set ("surprise me, unwatched, 80s, under 2h"). Each pick is the same record `list_media` returns. `filters` names what the tag filters matched, as in `list_media`, and `collection` with no `kind` picks the kind the collection holds. `detail: true` adds fields such as cast, crew and a summary to each record. `user` picks as a Plex Home user, so unwatched means unwatched by them. |
+| `random_pick` | N random items matching any `list_media` filter set ("surprise me, unwatched, 80s, under 2h"). Each pick is the same record `list_media` returns. `filters` names what the tag filters matched, as in `list_media`, and `collection` with no `kind` picks the kind the collection holds. A smart collection with no tag is an error naming the ratingKey to pass to `get_children`. `detail: true` adds fields such as cast, crew and a summary to each record. `user` picks as a Plex Home user, so unwatched means unwatched by them. |
 | `continue_watching` | Plex's Continue Watching row: the next unwatched episode per in-progress show and any partially watched movie, with how far into each you are. `detail: true` returns full item records instead, and caps `limit` at 25. |
 | `get_watchlist` | The server owner's plex.tv watchlist, with whether each title is in a library here and its ratingKey if so. Paginated (`offset`/`limit`). |
 
@@ -646,6 +646,20 @@ wrong kind from a filter that really matched nothing. We also rejected a note on
 the empty result because it still leaves you making a second call for an answer
 the server already has. Requiring `kind` with `collection` would break every
 movie call that works today, so we rejected that too.
+
+If you name a smart collection in the `collection` filter of `list_media` or
+`random_pick` and it has no tag, you get an error naming its ratingKey and
+`get_children`. The filter is a Plex tag query and most smart collections have
+no tag. Without this check, you'd get `No collection`, or the name would fall
+back to a longer tag and list a different collection's members. The check adds a
+read of the library's collections, and only when no tag matches the name
+exactly. A smart collection that does have an exact tag lists as usual. We left
+that alone because the 3 we checked list the same total as their `childCount`. We
+rejected listing a smart collection's members in `list_media` because the filter
+would stop being a Plex query, so every other filter and sort would need its own
+handling, for
+something `get_children` already does. We rejected only documenting it because
+`No collection` would stay false and the wrong members would stay too.
 
 A per-user view switches to that user's own token where Plex allows it (Home
 users), because `viewCount` reflects the requesting account. Plex doesn't allow

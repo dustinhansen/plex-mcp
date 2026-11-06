@@ -267,11 +267,22 @@ export function makeClient({ baseUrl, token, fetchImpl = globalThis.fetch as Fet
     return hit;
   }
 
+  /** Most smart collections have no tag, so no collection filter can list them.
+   *  Without this, naming one reads as "no such collection" or, through the
+   *  substring fallback, lists a different collection. */
+  async function refuseIfSmartCollection(sectionKey: string, name: string): Promise<void> {
+    const query = name.toLowerCase();
+    const collections = await plexAll(`/library/sections/${sectionKey}/collections`);
+    const smart = collections.find((item): item is PlexMetadata => "smart" in item && item.smart === "1" && item.title.toLowerCase() === query);
+    if (smart) throw new Error(`"${smart.title}" is a smart collection with no tag to filter on. Call get_children with ratingKey ${smart.ratingKey} to list its members.`);
+  }
+
   async function resolveSectionTag(sectionKey: string, tagType: string, name: string): Promise<{ id: string; name: string }> {
     const directories = (await plexAll(`/library/sections/${sectionKey}/${tagType}`, {}, { key: "Directory" })).filter(isPlexDirectory);
     const query = name.toLowerCase();
-    const hit = directories.find((directory) => directory.title.toLowerCase() === query) ??
-      directories.find((directory) => directory.title.toLowerCase().includes(query));
+    const exact = directories.find((directory) => directory.title.toLowerCase() === query);
+    if (!exact && tagType === "collection") await refuseIfSmartCollection(sectionKey, name);
+    const hit = exact ?? directories.find((directory) => directory.title.toLowerCase().includes(query));
     if (!hit) {
       const near = directories.filter((directory) => directory.title.toLowerCase().startsWith(query[0] ?? "")).slice(0, 8);
       const nearMatches = near.length ? ` Near matches: ${near.map((item) => item.title).join(", ")}` : "";

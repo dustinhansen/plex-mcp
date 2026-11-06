@@ -1,11 +1,11 @@
 /** The tools that read a library and its items, and the filter and fetch
  *  helpers the other tool modules build on. */
 import { z } from "zod";
-import { listParams, SORT_KEYS, KIND_TYPE, hasDefaultKind, sectionKind, sinceValue } from "./filters.js";
+import { listParams, SORT_KEYS, KIND_TYPE, hasDefaultKind, isTypedKind, sectionKind, sinceValue } from "./filters.js";
 import { tags, itemDict, extraDict, iso, isWatched, sectionDict, libraryType, hasPersonalMediaAgent, playUser, project } from "./format.js";
 import { isNotFound } from "./upstream.js";
 import { defineTool, PLEX_ID, READ_ONLY } from "../types/tool-registration.js";
-import type { PlexClient, PlexMediaContainer, PlexMetadata, Query } from "../types/boundaries.js";
+import type { PlexClient, PlexMediaContainer, PlexMetadata, PlexSection, Query } from "../types/boundaries.js";
 
 /** library_changes reads a section's /all listing, which never holds
  *  collections, so its kinds stop short of "collection". */
@@ -26,7 +26,8 @@ export const FILTER_SCHEMA = {
   year: z.number().int().optional(),
   decade: z.string().optional().describe("e.g. '1970s'"),
   contentRating: z.string().optional().describe("e.g. 'PG-13'"),
-  collection: nonBlank("collection").optional().describe("filter to members of a collection"),
+  collection: nonBlank("collection").optional()
+    .describe("filter to members of a collection. Leaving kind out uses the kind of item the collection holds"),
   country: nonBlank("country").optional(),
   studio: nonBlank("studio").optional(),
   label: nonBlank("label").optional().describe("filter to items carrying this Plex label. Plex lists every label on the server under every library, so a label used only in another library returns no items rather than an error"),
@@ -56,6 +57,20 @@ export async function resolveFilterTags(
     filters[field] = hit.name;
   }
   return Object.keys(filters).length ? { tagIds, filters } : { tagIds };
+}
+
+/** The kind a listing filters on when the caller names none: what a named
+ *  collection holds, else the library's own kind. A collection can sit below its
+ *  library's kind (a show library's can hold episodes), and a listing at the
+ *  wrong kind reads as empty. Plex names the kind as the collection's subtype. */
+export async function defaultKind(client: PlexClient, section: PlexSection, collectionTitle: string | undefined) {
+  if (collectionTitle !== undefined) {
+    const collections = await client.plexAll(`/library/sections/${section.key}/collections`);
+    const collection = collections.find((item) => item.title === collectionTitle);
+    const subtype = collection && "subtype" in collection ? collection.subtype : undefined;
+    if (isTypedKind(subtype)) return subtype;
+  }
+  return sectionKind(section.type);
 }
 
 /** How list_media and random_pick describe the `filters` key in their result. */
@@ -195,7 +210,8 @@ export function readTools(root: PlexClient) {
         "the full library, seen and unseen. For SHOW libraries: the watched filter " +
         "means any-episode-played (watched) / has-unplayed-episodes (unwatched), " +
         "while each record's watched field means fully watched. A partially-watched " +
-        "show matches both filters' opposites. kind defaults to the library's natural " +
+        "show matches both filters' opposites. kind defaults to the kind a named " +
+        "collection holds, else the library's natural " +
         "top-level type (movie/show/artist). Use episode/track/album/season for " +
         "deeper types, or collection to list a section's collections. " +
         "rated filters on the owner's star rating (userRating, 1-10 internal scale). " +
@@ -219,8 +235,8 @@ export function readTools(root: PlexClient) {
           const container = await client.plex(`/library/sections/${section.key}/collections`, {}, { start: args.offset, size: limit });
           return page(container, args.offset, args.detail, args.fields);
         }
-        const kind = args.kind ?? sectionKind(section.type);
         const { tagIds, filters } = await resolveFilterTags(client, section.key, args);
+        const kind = args.kind ?? await defaultKind(client, section, filters?.collection);
         const container = await client.plex(`/library/sections/${section.key}/all`, listParams({ ...args, kind }, tagIds), {
           start: args.offset, size: limit,
         });

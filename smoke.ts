@@ -3,7 +3,7 @@
 // PLEX_READ_ONLY=1 builds the read-only surface and skips the writes.
 import assert from "node:assert/strict";
 import { makeClient } from "#dist/lib/client.js";
-import { cutoffEpoch, listParams } from "#dist/lib/filters.js";
+import { cutoffEpoch, isTypedKind, listParams } from "#dist/lib/filters.js";
 import { readTools } from "#dist/lib/tools-read.js";
 import { historyTools } from "#dist/lib/tools-history.js";
 import { writeTools } from "#dist/lib/tools-write.js";
@@ -162,6 +162,15 @@ await checkFilter("collection", collection, (movie) => movie.collections.include
 if (collection) await run("list_media", { library: MOVIES, watched: "all", collection, sort: "title", order: "asc", ...pageArgs, detail: true }, async (out) => {
   for (const item of out.items) assert.deepEqual(item.collections, (await tools.get_item.handler({ ratingKey: item.ratingKey })).collections, `detail record ${item.ratingKey} names its collections`);
 });
+// a collection's kind can sit below its library's, and the default kind has to find it anyway
+const tvKey = (await client.sectionByTitle(TV)).key;
+const tvTags = new Set(((await client.plex(`/library/sections/${tvKey}/collection`)).Directory ?? []).map((tag: Live) => tag.title));
+const nonShowCollection = ((await client.plex(`/library/sections/${tvKey}/collections`)).Metadata ?? []).find((item: Live) => item.subtype !== "show" && isTypedKind(item.subtype) && tvTags.has(item.title));
+if (nonShowCollection) await run("list_media", { library: TV, watched: "all", collection: nonShowCollection.title, sort: "title", order: "asc", ...pageArgs }, (out) => {
+  assert.ok(out.total > 0, "a collection below its library's kind listed nothing without kind");
+  assert.ok(out.items.every((item: Live) => item.kind === nonShowCollection.subtype), "records are the collection's kind");
+});
+else console.log("skip collection default kind (no TV collection below the show kind to test with)");
 const country = firstTag("countries");
 await checkFilter("country", country, (movie) => movie.countries.includes(country));
 const studio = credited.find((movie) => movie.studio)?.studio;

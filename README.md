@@ -90,7 +90,7 @@ server registers.
 | tool | what it does |
 |---|---|
 | `list_libraries` | All sections with `libraryType` (Movies / TV Shows / Music / Photos / Other Videos), scanner type, agent, and whether a scan is running. |
-| `list_media` | Any library, any kind (movie/show/season/episode/artist/album/track/collection). Filters: watched, rated, genre, year, decade, contentRating, collection, country, studio, label, maxDurationMin, addedSince, lastViewedBefore, lastViewedAfter. The last-viewed filters take an ISO date or a relative value like `-3y`. A never-watched item counts as last viewed before any date, so pair `lastViewedBefore` with `watched: "watched"` to leave those out. Sorts: title, year, rating, audienceRating, userRating, addedAt, lastViewedAt, viewCount, duration, random. A `filters` object names what each `genre`, `collection`, `country`, `studio` or `label` filter matched, so you can see when a name matched a longer one. Paginated (`offset`/`limit`/`nextOffset`). `fields` projects each record to the keys you need. `detail: true` adds fields such as cast, crew and a summary to each record, and caps `limit` at 25. |
+| `list_media` | Any library, any kind (movie/show/season/episode/artist/album/track/collection). Filters: watched, rated, genre, year, decade, contentRating, collection, country, studio, label, maxDurationMin, addedSince, lastViewedBefore, lastViewedAfter. The last-viewed filters take an ISO date or a relative value like `-3y`. A never-watched item counts as last viewed before any date, so pair `lastViewedBefore` with `watched: "watched"` to leave those out. Sorts: title, year, rating, audienceRating, userRating, addedAt, lastViewedAt, viewCount, duration, random. A `filters` object names what each `genre`, `collection`, `country`, `studio` or `label` filter matched, so you can see when a name matched a longer one. `collection` with no `kind` lists the kind the collection holds, so an episode collection in a TV library lists episodes. Paginated (`offset`/`limit`/`nextOffset`). `fields` projects each record to the keys you need. `detail: true` adds fields such as cast, crew and a summary to each record, and caps `limit` at 25. |
 | `search` | Global search across libraries incl. people, collections, playlists. `externalId` (`imdb:tt0113277`, `tmdb:949`, `tvdb:12345`) looks a movie or show up by the id Plex holds for it instead. |
 | `get_item` | Full metadata + file info (paths, codecs, sizes, every version) by ratingKey. `labels` names the item's Plex labels, and is an empty array when it has none. |
 | `get_children` | Children of a show (seasons), season (episodes), artist (albums), album (tracks), collection (items) or playlist (items, with `playlist: true`). Paginated (`offset`/`limit`/`nextOffset`). `fields` projects each record to the keys you need. `detail: true` adds fields such as cast, crew and a summary to each record, and caps `limit` at 25. |
@@ -104,7 +104,7 @@ server registers.
 | tool | what it does |
 |---|---|
 | `similar_items` | Plex's "more like this" for an item, with a watched filter. |
-| `random_pick` | N random items matching any `list_media` filter set ("surprise me, unwatched, 80s, under 2h"). Each pick is the same record `list_media` returns. `filters` names what the tag filters matched, as in `list_media`. `detail: true` adds fields such as cast, crew and a summary to each record. `user` picks as a Plex Home user, so unwatched means unwatched by them. |
+| `random_pick` | N random items matching any `list_media` filter set ("surprise me, unwatched, 80s, under 2h"). Each pick is the same record `list_media` returns. `filters` names what the tag filters matched, as in `list_media`, and `collection` with no `kind` picks the kind the collection holds. `detail: true` adds fields such as cast, crew and a summary to each record. `user` picks as a Plex Home user, so unwatched means unwatched by them. |
 | `continue_watching` | Plex's Continue Watching row: the next unwatched episode per in-progress show and any partially watched movie, with how far into each you are. `detail: true` returns full item records instead, and caps `limit` at 25. |
 | `get_watchlist` | The server owner's plex.tv watchlist, with whether each title is in a library here and its ratingKey if so. Paginated (`offset`/`limit`). |
 
@@ -626,6 +626,20 @@ answers 404 for shows, seasons, artists and albums. We also rejected looking up
 the item's kind first, because that adds a request to every call and still needs
 the fallback. A `collection` parameter is out too, because anyone who left it off
 would get a silent 0.
+
+A `collection` filter with no `kind` lists the kind the collection holds (the
+collection's `subtype` in Plex). A TV library's collection can hold episodes, and
+a listing at the library's top-level kind would read as empty, so `list_media`
+and `random_pick` read the subtype first. That adds a read of the library's
+collections, and only on a call that names a collection and no kind. If you pass
+`kind`, it's sent as given. If the collection holds something the tool has no
+kind for, or Plex lists no collection by that title, the call uses the kind it
+would with no collection at all, since a listing has to filter on some kind. We
+rejected retrying at another kind after 0 results because a retry can't tell the
+wrong kind from a filter that really matched nothing. We also rejected a note on
+the empty result because it still leaves you making a second call for an answer
+the server already has. Requiring `kind` with `collection` would break every
+movie call that works today, so we rejected that too.
 
 A per-user view switches to that user's own token where Plex allows it (Home
 users), because `viewCount` reflects the requesting account. Plex doesn't allow

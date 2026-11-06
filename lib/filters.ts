@@ -15,6 +15,9 @@ export const libraryItemUri = (machineId: string, ratingKeys: string[]): string 
   `server://${machineId}/${IDENT}/library/metadata/${ratingKeys.join(",")}`;
 
 export const KIND_TYPE = { movie: 1, show: 2, season: 3, episode: 4, artist: 8, album: 9, track: 10 } as const;
+/** A kind Plex has a type number for, which leaves out "collection". */
+export const isTypedKind = (value: string | undefined): value is keyof typeof KIND_TYPE =>
+  Object.hasOwn(KIND_TYPE, value ?? "");
 const SECTION_DEFAULT_KIND = { movie: "movie", show: "show", artist: "artist" } as const;
 
 /** Movie, show and artist sections have a kind of their own. A photo section

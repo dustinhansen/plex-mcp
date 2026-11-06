@@ -194,6 +194,22 @@ await run("get_extras", { ratingKey: all.items[0].ratingKey },
 const show = await run("list_media", { library: TV, watched: "all", sort: "addedAt", order: "desc", offset: 0, limit: 1, detail: false }, (out) => assert.ok(out.items[0]));
 const seasons = await run("get_children", { ratingKey: show.items[0].ratingKey, playlist: false, ...pageArgs },
   (out) => assert.ok(out.items.length > 0));
+// get_children reads a collection from whichever of 2 paths Plex lists it on, and
+// neither path serves every collection, so each variety gets a live check. Only a
+// collection with members counts, because an empty answer would match an empty one.
+const collectionVariety = (item: Live) => (item.smart === "1" ? "smart" : item.subtype === "episode" ? "episode" : "regular");
+const allCollections: Live[] = [];
+for (const section of await client.sections()) allCollections.push(...await client.plexAll(`/library/sections/${section.key}/collections`));
+for (const variety of ["regular", "episode", "smart"]) {
+  const sample = allCollections.find((item) => collectionVariety(item) === variety && item.childCount > 0);
+  if (!sample) {
+    console.log(`skip get_children ${variety} collection (none with members on this server)`);
+    continue;
+  }
+  const { total } = await tools.get_children.handler({ ratingKey: sample.ratingKey, playlist: false, ...pageArgs });
+  assert.equal(total, sample.childCount, `get_children ${variety} collection: total ${total}, childCount ${sample.childCount}`);
+  console.log(`ok  get_children ${variety} collection (total matches childCount)`);
+}
 
 if (director) {
   await run("search", { query: director, limit: 10 },

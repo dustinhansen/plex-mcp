@@ -23,7 +23,7 @@ type Live = any;
 interface LiveTool { handler(args: object): Live }
 const tools = buildTools(client, { readOnly, playback: process.env.PLEX_ALLOW_PLAYBACK === "1", tautulli }) as unknown as Record<string, LiveTool>;
 // names read from the server stay out of the log, so its output can be shared
-const NAMED = new Set(["library", "name", "user", "query", "genre", "title", "externalId", "collection", "country", "studio"]);
+const NAMED = new Set(["library", "name", "user", "query", "genre", "title", "externalId", "collection", "country", "studio", "label"]);
 const run = async (name: string, args: object, check: (out: Live) => unknown): Promise<Live> => {
   const out = await tools[name].handler(args);
   await check(out);
@@ -166,6 +166,10 @@ const country = firstTag("countries");
 await checkFilter("country", country, (movie) => movie.countries.includes(country));
 const studio = credited.find((movie) => movie.studio)?.studio;
 await checkFilter("studio", studio, (movie) => movie.studio === studio);
+// from a movie's own labels: Plex lists every label on the server under every
+// library, so the first one listed may be on nothing here
+const label = firstTag("labels");
+await checkFilter("label", label, (movie) => movie.labels.includes(label));
 // oldest first, so an ignored cutoff would surface items added before it
 const addedSince = all.items[0].addedAt;
 await checkFilter("addedSince", addedSince, (movie) => movie.addedAt >= addedSince, { sort: "addedAt", order: "asc" });

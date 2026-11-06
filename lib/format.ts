@@ -7,7 +7,7 @@ import type { PlexMetadata, PlexSection } from "../types/boundaries.js";
 type RecordValue = string | number | boolean | null | string[] | ToolRecord | ToolRecord[];
 export interface ToolRecord { [key: string]: RecordValue | undefined }
 
-const tags = (items: PlexMetadata["Genre"] | undefined): string[] => (items ?? []).map((item) => item.tag);
+export const tags = (items: PlexMetadata["Genre"] | undefined): string[] => (items ?? []).map((item) => item.tag);
 export const iso = (epoch: number | undefined): string | null => epoch ? new Date(epoch * 1000).toISOString() : null;
 export const isoDay = (epoch: number | undefined): string | null => epoch ? new Date(epoch * 1000).toISOString().slice(0, 10) : null;
 export const mins = (milliseconds: number | undefined): number | null => milliseconds ? Math.round(milliseconds / 60_000) : null;

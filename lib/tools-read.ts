@@ -2,7 +2,7 @@
  *  helpers the other tool modules build on. */
 import { z } from "zod";
 import { listParams, SORT_KEYS, KIND_TYPE, hasDefaultKind, sectionKind, sinceValue } from "./filters.js";
-import { itemDict, extraDict, iso, isWatched, sectionDict, libraryType, hasPersonalMediaAgent, playUser, project } from "./format.js";
+import { tags, itemDict, extraDict, iso, isWatched, sectionDict, libraryType, hasPersonalMediaAgent, playUser, project } from "./format.js";
 import { isNotFound } from "./upstream.js";
 import { defineTool, PLEX_ID, READ_ONLY } from "../types/tool-registration.js";
 import type { PlexClient, PlexMediaContainer, PlexMetadata, Query } from "../types/boundaries.js";
@@ -29,6 +29,7 @@ export const FILTER_SCHEMA = {
   collection: nonBlank("collection").optional().describe("filter to members of a collection"),
   country: nonBlank("country").optional(),
   studio: nonBlank("studio").optional(),
+  label: nonBlank("label").optional().describe("filter to items carrying this Plex label. Plex lists every label on the server under every library, so a label used only in another library returns no items rather than an error"),
   maxDurationMin: z.number().int().optional(),
   addedSince: z.string().optional().describe("ISO date or relative like '-30d'"),
   lastViewedBefore: z.string().optional()
@@ -48,7 +49,7 @@ export async function resolveFilterTags(
 ): Promise<{ tagIds: Record<string, string>; filters?: Record<string, string> }> {
   const tagIds: Record<string, string> = {};
   const filters: Record<string, string> = {};
-  for (const field of ["genre", "collection", "country", "studio"]) {
+  for (const field of ["genre", "collection", "country", "studio", "label"]) {
     if (typeof args[field] !== "string") continue;
     const hit = await client.resolveSectionTag(sectionKey, field, args[field]);
     tagIds[field] = field === "studio" ? hit.name : hit.id;
@@ -59,7 +60,7 @@ export async function resolveFilterTags(
 
 /** How list_media and random_pick describe the `filters` key in their result. */
 export const FILTERS_RESULT_CLAUSE =
-  "The result's filters object names what each genre/collection/country/studio " +
+  "The result's filters object names what each genre/collection/country/studio/label " +
   "filter matched: the same name ignoring case first, else the first one containing it.";
 
 const pageSchema = {
@@ -296,7 +297,8 @@ export function readTools(root: PlexClient) {
       annotations: READ_ONLY,
       description:
         "Full metadata for one item by ratingKey (any kind). Movies include " +
-        "file paths/codec/size. Shows include watch progress (episodes watched / total).",
+        "file paths/codec/size. Shows include watch progress (episodes watched / total). " +
+        "labels names the item's Plex labels, and is empty when it has none.",
       inputSchema: { ratingKey: PLEX_ID },
       handler: async ({ ratingKey }) => {
         const noItem = () => new Error(`No item with ratingKey ${ratingKey}`);
@@ -307,6 +309,9 @@ export function readTools(root: PlexClient) {
         const item = container.Metadata?.[0];
         if (!item) throw noItem();
         const record = itemDict(item, true);
+        // Not in itemDict's detail fields: those also build listing records, and
+        // a listing leaves labels out, so they would all read as empty.
+        record.labels = tags(item.Label);
         // An item can hold several versions (4K + 1080p). Every version is
         // reported, and sizeGB sums all of them.
         const gb = (bytes: number) => Math.round((bytes / 1e9) * 100) / 100;

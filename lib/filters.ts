@@ -120,7 +120,7 @@ function sortParams(sort: ListArguments["sort"] = "addedAt", order = "desc"): Qu
   return field === "random" ? { sort: "random" } : { sort: `${field}:${order}` };
 }
 
-const TAG_FILTERS = ["genre", "collection", "country", "studio", "director", "actor", "writer", "composer"] as const;
+const TAG_FILTERS = ["genre", "collection", "country", "studio", "label", "director", "actor", "writer", "composer"] as const;
 
 /** Build the full param object for /library/sections/{key}/all. */
 export function listParams(args: ListArguments, tagIds: Record<string, string | number | undefined> = {}): Query {

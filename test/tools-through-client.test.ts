@@ -223,6 +223,20 @@ test("get_item: reports resolution, codecs and size from Media[].Part[]", async 
   });
 });
 
+test("get_item: a movie or an episode returns each label's name", async () => {
+  const { client } = plexServer({
+    "/library/metadata/10": { size: 1, Metadata: [{ ...ARRIVAL, Label: [{ id: 901, filter: "label=901", tag: "Halloween" }, { id: 902, filter: "label=902", tag: "Rainy Day" }] }] },
+    "/library/metadata/77": { size: 1, Metadata: [{ ratingKey: "77", type: "episode", title: "Woe's Hollow", Label: [{ id: 901, filter: "label=901", tag: "Halloween" }] }] },
+  });
+  assert.deepEqual((await readTools(client).get_item.handler({ ratingKey: "10" })).labels, ["Halloween", "Rainy Day"]);
+  assert.deepEqual((await readTools(client).get_item.handler({ ratingKey: "77" })).labels, ["Halloween"]);
+});
+
+test("get_item: an item with no labels returns an empty labels array", async () => {
+  const { client } = plexServer({ "/library/metadata/10": { size: 1, Metadata: [ARRIVAL] } });
+  assert.deepEqual((await readTools(client).get_item.handler({ ratingKey: "10" })).labels, []);
+});
+
 test("get_item: a ratingKey Plex answers 404 for is named as no item", async () => {
   const { client } = plexServer({});
   await assert.rejects(async () => readTools(client).get_item.handler({ ratingKey: "999" }), { message: "No item with ratingKey 999" });
@@ -327,6 +341,84 @@ test("list_media and random_pick: filters names the tag each filter resolved to,
     const none = JSON.parse((await callTool(client, tool, { decade: "2010s" })).text);
     assert.equal("filters" in none, false, tool);
   }
+});
+
+const LABEL_INDEX = { size: 2, Directory: [{ key: "901", title: "Halloween" }, { key: "902", title: "Family Classics" }] };
+
+test("list_media: label sends the label's id and names what it matched, for the default kind and for episodes", async () => {
+  const { calls, client } = plexServer({
+    "/library/sections": SECTIONS,
+    "/library/sections/1/label": LABEL_INDEX,
+    "/library/sections/2/label": LABEL_INDEX,
+    "/library/sections/1/all": { size: 1, totalSize: 1, Metadata: [ARRIVAL] },
+    "/library/sections/2/all": { size: 1, totalSize: 1, Metadata: [{ ratingKey: "77", type: "episode", title: "Woe's Hollow" }] },
+  });
+  const movies = JSON.parse((await callTool(client, "list_media", { label: "halloween" })).text);
+  assert.deepEqual(movies.filters, { label: "Halloween" });
+  assert.deepEqual(movies.items.map((item: ToolRecord) => item.title), ["Arrival"]);
+  assert.equal(calls.at(-1)!.path, "/library/sections/1/all");
+  assert.equal(calls.at(-1)!.query.label, "901");
+  assert.equal(calls.at(-1)!.query.type, "1");
+
+  const episodes = JSON.parse((await callTool(client, "list_media", { library: "TV Shows", kind: "episode", label: "Halloween" })).text);
+  assert.deepEqual(episodes.items.map((item: ToolRecord) => item.title), ["Woe's Hollow"]);
+  assert.equal(calls.at(-1)!.path, "/library/sections/2/all");
+  assert.equal(calls.at(-1)!.query.label, "901");
+  assert.equal(calls.at(-1)!.query.type, "4");
+
+  // A substring match reports the label the fallback picked.
+  const near = JSON.parse((await callTool(client, "list_media", { label: "classics" })).text);
+  assert.deepEqual(near.filters, { label: "Family Classics" });
+  assert.equal(calls.at(-1)!.query.label, "902");
+});
+
+test("list_media: a label Plex lists but nothing in this library carries returns no items, not an error", async () => {
+  const { client } = plexServer({
+    "/library/sections": SECTIONS,
+    "/library/sections/1/label": LABEL_INDEX,
+    "/library/sections/1/all": { size: 0, totalSize: 0 },
+  });
+  const result = await callTool(client, "list_media", { label: "Halloween" });
+  assert.equal(result.isError, undefined, result.text);
+  const out = JSON.parse(result.text);
+  assert.equal(out.total, 0);
+  assert.deepEqual(out.items, []);
+});
+
+test("list_media: a label matching nothing is refused the way an unknown genre is, and no listing is read", async () => {
+  const { calls, client } = plexServer({
+    "/library/sections": SECTIONS,
+    "/library/sections/1/label": LABEL_INDEX,
+    "/library/sections/1/genre": { size: 1, Directory: [{ key: "7", title: "Horror" }] },
+  });
+  const label = await callTool(client, "list_media", { label: "Halo" });
+  const genre = await callTool(client, "list_media", { genre: "Halo" });
+  assert.equal(label.isError, true);
+  assert.equal(genre.isError, true);
+  assert.equal(label.text, 'Error: No label "Halo" in this library. Near matches: Halloween');
+  assert.equal(genre.text, 'Error: No genre "Halo" in this library. Near matches: Horror');
+  assert.equal(calls.some((call) => call.path.endsWith("/all")), false);
+});
+
+test("list_media and random_pick: a blank label is refused by name, and nothing is sent", async () => {
+  const { calls, client } = plexServer({});
+  for (const tool of ["list_media", "random_pick"]) {
+    const result = await callTool(client, tool, { label: " " });
+    assert.equal(result.isError, true, tool);
+    assert.match(result.text, /label cannot be blank/, tool);
+  }
+  assert.equal(calls.length, 0);
+});
+
+test("random_pick: label filters the picks like every other list_media filter", async () => {
+  const { calls, client } = plexServer({
+    "/library/sections": SECTIONS,
+    "/library/sections/1/label": LABEL_INDEX,
+    "/library/sections/1/all": { size: 1, totalSize: 1, Metadata: [ARRIVAL] },
+  });
+  const out = JSON.parse((await callTool(client, "random_pick", { label: "Halloween" })).text);
+  assert.deepEqual(out.filters, { label: "Halloween" });
+  assert.equal(calls.at(-1)!.query.label, "901");
 });
 
 test("list_media: fields projection leaves filters at the top level, out of each record", async () => {

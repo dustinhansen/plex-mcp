@@ -19,6 +19,8 @@
   its usage line and exits 2, as it already did when nothing followed it.
   It used to take the value as the file name, so `login --write --foo`
   appended your token to a file called `--foo`.
+- `get_children` lists the members of an episode collection and of a smart
+  collection. It used to return `total: 0` for most of them.
 
 ## 0.9.1 — 2026-11-02
 

@@ -283,6 +283,66 @@ test("get_children: seasons of a show and items of a playlist", async () => {
   assert.equal(calls.at(-1)!.headers["X-Plex-Container-Size"], "100");
 });
 
+const CHILDREN_ARGS = { playlist: false, offset: 0, limit: 100, detail: false };
+const NO_CHILDREN = { size: 0, totalSize: 0 };
+const MEMBER = { ratingKey: "31", type: "episode", title: "Pilot", grandparentTitle: "Severance" };
+
+test("get_children: an episode collection lists its members from the collections path, with the caller's paging", async () => {
+  const { client, calls } = plexServer({
+    "/library/metadata/30/children": NO_CHILDREN,
+    "/library/collections/30/children": { size: 1, totalSize: 1, Metadata: [MEMBER] },
+  });
+  const out = await readTools(client).get_children.handler({ ...CHILDREN_ARGS, ratingKey: "30", limit: 5 });
+  assert.equal(out.total, 1);
+  assert.deepEqual(out.items.map((i) => i.title), ["Pilot"]);
+  assert.deepEqual(calls.map((c) => c.path), ["/library/metadata/30/children", "/library/collections/30/children"]);
+  assert.equal(calls.at(-1)!.headers["X-Plex-Container-Size"], "5");
+});
+
+test("get_children: children on the metadata path take one request, and the collections path is left alone", async () => {
+  const { client, calls } = plexServer({
+    "/library/metadata/30/children": { size: 1, totalSize: 1, Metadata: [MEMBER] },
+    "/library/collections/30/children": NO_CHILDREN,
+  });
+  const out = await readTools(client).get_children.handler({ ...CHILDREN_ARGS, ratingKey: "30" });
+  assert.equal(out.total, 1);
+  assert.deepEqual(calls.map((c) => c.path), ["/library/metadata/30/children"]);
+});
+
+test("get_children: an offset past the end of a non-empty listing stays on the metadata path", async () => {
+  const { client, calls } = plexServer({ "/library/metadata/30/children": { size: 0, totalSize: 4 } });
+  const out = await readTools(client).get_children.handler({ ...CHILDREN_ARGS, ratingKey: "30", offset: 10 });
+  assert.equal(out.total, 4);
+  assert.equal(out.returned, 0);
+  assert.deepEqual(calls.map((c) => c.path), ["/library/metadata/30/children"]);
+});
+
+test("get_children: an item with no children reads as empty when the collections path answers 404", async () => {
+  const { client } = plexServer({ "/library/metadata/30/children": NO_CHILDREN });
+  const out = await readTools(client).get_children.handler({ ...CHILDREN_ARGS, ratingKey: "30" });
+  assert.deepEqual(out, { total: 0, offset: 0, returned: 0, nextOffset: null, items: [] });
+});
+
+test("get_children: an empty collection reads as empty on both paths", async () => {
+  const { client } = plexServer({ "/library/metadata/30/children": NO_CHILDREN, "/library/collections/30/children": NO_CHILDREN });
+  const out = await readTools(client).get_children.handler({ ...CHILDREN_ARGS, ratingKey: "30" });
+  assert.equal(out.total, 0);
+});
+
+test("get_children: an unknown ratingKey still fails, without trying the collections path", async () => {
+  const { client, calls } = plexServer({});
+  await assert.rejects(async () => readTools(client).get_children.handler({ ...CHILDREN_ARGS, ratingKey: "30" }), /404/);
+  assert.deepEqual(calls.map((c) => c.path), ["/library/metadata/30/children"]);
+});
+
+test("get_children: a collections path failure other than 404 is reported, not read as empty", async () => {
+  const fetchImpl = async (url: URL) => new URL(url).pathname.startsWith("/library/collections/")
+    ? { ok: false, status: 500, text: async () => "" }
+    : { ok: true, status: 200, text: async () => JSON.stringify({ MediaContainer: NO_CHILDREN }) };
+  const client = makeClient({ baseUrl: "http://plex.test:32400", token: "tok", fetchImpl, plextv: makePlexTv({ fetchImpl }) });
+  await assert.rejects(async () => readTools(client).get_children.handler({ ...CHILDREN_ARGS, ratingKey: "30" }), /500/);
+});
+
 test("person_credits: resolves the director through the search hub, then filters the section", async () => {
   const { client, calls } = plexServer({
     "/library/sections": SECTIONS,

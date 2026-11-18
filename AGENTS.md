@@ -52,5 +52,5 @@ summary and a `duration_ms` well under a normal full run.
 
 - [CONTEXT.md](CONTEXT.md) is the glossary: the terms the tools, docs and code
   share.
-- The README's [Design notes](README.md#design-notes) hold the reasons behind
+- [docs/design-notes.md](docs/design-notes.md) holds the reasons behind
   the tool surface and these rules.

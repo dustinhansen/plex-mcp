@@ -155,9 +155,9 @@ for as proof of ownership, and a test keeps that label, `server.json`, and
 ## Published port
 
 Every copy-paste example in the README publishes the port on loopback only. I
-made this decision because people copy from this page, so whatever the examples
-publish becomes the default without anyone choosing it. The compose and `docker
-run` examples in the README and in [docker.md](docker.md) publish
+made this decision because people copy from the README, so whatever the
+examples publish becomes the default without anyone choosing it. The compose
+and `docker run` examples in the README and in [docker.md](docker.md) publish
 `127.0.0.1:8627:8627`, the same mapping as the registry entry, and a test keeps
 all 3 in step. (The image sets `MCP_HOST=0.0.0.0`, since a container that
 listens on its own loopback is unreachable through any port mapping, so the

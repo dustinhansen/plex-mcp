@@ -71,5 +71,5 @@ with no test framework, and mock Plex by injecting a `fetch`. New behavior
 should come with a test. Follow whatever the nearest existing test file does.
 
 There is no linter or formatter, so match the style of the file you're
-editing. The reasoning behind the bigger decisions is in the README's
-[Design notes](README.md#design-notes).
+editing. The reasoning behind the bigger decisions is in
+[docs/design-notes.md](docs/design-notes.md).
